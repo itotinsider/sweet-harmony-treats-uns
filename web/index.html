@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweet Harmony Treats — Systems</title>
+<style>
+  :root {
+    --bg: #14171c;
+    --panel: #1c2028;
+    --panel-head: #21252e;
+    --border: #2a2f3a;
+    --text: #e7eaf0;
+    --muted: #8b93a7;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
+  body { padding: 0 20px 40px; min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; gap: 14px; margin: 0 -20px 28px; padding: 22px 20px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .brand-mark { flex: none; width: 40px; height: 40px; }
+  h1 {
+    margin: 0; font-size: 24px; font-weight: 800; letter-spacing: .01em;
+    background: linear-gradient(90deg, #fbe3b8, #e6a55a 55%, #d9824a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header .sub { margin-top: 2px; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+
+  main { max-width: 1100px; margin: 0 auto; }
+  section.level { margin-bottom: 32px; }
+  .level-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .level-head .badge {
+    font: 800 10px var(--mono); letter-spacing: .06em; color: #04130b; background: var(--accent, #8b93a7);
+    padding: 3px 8px; border-radius: 4px;
+  }
+  .level-head h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text); }
+  .level-head .isa { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .card {
+    display: block; text-decoration: none; color: var(--text); background: var(--panel);
+    border: 1px solid var(--border); border-top: 3px solid var(--accent, var(--border)); border-radius: 8px;
+    padding: 16px; transition: transform .12s ease, border-color .12s ease;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--accent, var(--border)); }
+  .card .icon { font-size: 22px; line-height: 1; margin-bottom: 10px; }
+  .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+  .card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .card .href { margin-top: 10px; font: 11px var(--mono); color: var(--accent, var(--muted)); }
+
+  footer { max-width: 1100px; margin: 20px auto 0; color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="brand-mark" viewBox="0 0 38 38" aria-hidden="true">
+    <defs>
+      <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fbe3b8"/><stop offset="1" stop-color="#d9824a"/>
+      </linearGradient>
+    </defs>
+    <rect x="3" y="3" width="32" height="32" rx="8" fill="url(#brand-grad)"/>
+    <path d="M13.7 7v24M24.3 7v24M7 13.7h24M7 24.3h24" stroke="#7a4a24" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
+  </svg>
+  <div>
+    <h1>Sweet Harmony Treats</h1>
+    <div class="sub">Munich · Waffle Line 01 — Digital Systems</div>
+  </div>
+</header>
+
+<main>
+  <section class="level" style="--accent:#e6a55a">
+    <div class="level-head">
+      <span class="badge">L2</span>
+      <h2>Process Control — SCADA</h2>
+      <span class="isa">ISA-95 Level 2</span>
+    </div>
+    <div class="cards">
+      <a class="card" href="/modern" style="--accent:#e6a55a">
+        <div class="icon">🖥️</div>
+        <h3>Modern HMI</h3>
+        <p>The current-generation SCADA view: live process values, oven mimic, alarms, the ISA-95 training pane, and the energy anomaly.</p>
+        <div class="href">/modern</div>
+      </a>
+      <a class="card" href="/classic" style="--accent:#2dd4bf">
+        <div class="icon">🖴</div>
+        <h3>1990s Classic HMI</h3>
+        <p>The same line, styled like a Windows-95-era SCADA package — beveled chrome, saturated colours, a marquee alarm ticker.</p>
+        <div class="href">/classic</div>
+      </a>
+    </div>
+  </section>
+
+  <section class="level" style="--accent:#3b82f6">
+    <div class="level-head">
+      <span class="badge">L3</span>
+      <h2>Plant Systems — MES / MOM</h2>
+      <span class="isa">ISA-95 Level 3</span>
+    </div>
+    <div class="cards">
+      <a class="card" href="/lab" style="--accent:#2563eb">
+        <div class="icon">🧪</div>
+        <h3>Quality Lab</h3>
+        <p>LIMS-style sampling for a lab technician: Proofing &amp; Oven sample queues, spec-limited result entry, trends.</p>
+        <div class="href">/lab</div>
+      </a>
+      <a class="card" href="/mes" style="--accent:#3b82f6">
+        <div class="icon">🧾</div>
+        <h3>Production (MES)</h3>
+        <p>A basic, non-integrated MES: production orders against 3 waffle recipes, a 6-step checklist, material &amp; yield reporting.</p>
+        <div class="href">/mes</div>
+      </a>
+      <a class="card" href="/maint" style="--accent:#0b5fa5">
+        <div class="icon">🛠️</div>
+        <h3>Maintenance</h3>
+        <p>An old-school SAP-PM-flavoured work order screen: functional locations, work centers, breakdown &amp; downtime reporting.</p>
+        <div class="href">/maint</div>
+      </a>
+    </div>
+  </section>
+
+  <section class="level" style="--accent:#a78bfa">
+    <div class="level-head">
+      <span class="badge">IT-OT</span>
+      <h2>Integration &amp; Data</h2>
+      <span class="isa">Unified Namespace</span>
+    </div>
+    <div class="cards">
+      <a class="card" href="http://localhost:1880" target="_blank" rel="noopener" style="--accent:#c0392b">
+        <div class="icon">🔀</div>
+        <h3>Node-RED</h3>
+        <p>The flows that read the ERP/LIMS CSV exports and republish Maintenance &amp; Quality records into the MQTT namespace.</p>
+        <div class="href">localhost:1880 ↗</div>
+      </a>
+      <a class="card" href="http://localhost:4000" target="_blank" rel="noopener" style="--accent:#e6a55a">
+        <div class="icon">🔎</div>
+        <h3>MQTT Explorer</h3>
+        <p>Browse the live topic tree, both the structured and raw namespaces, and publish test messages by hand.</p>
+        <div class="href">localhost:4000 ↗</div>
+      </a>
+      <a class="card" href="/exports" target="_blank" rel="noopener" style="--accent:#8b93a7">
+        <div class="icon">📄</div>
+        <h3>Data Exports</h3>
+        <p>The raw CSV extracts Node-RED reads from — one row per work order created, one per lab result registered.</p>
+        <div class="href">/exports ↗</div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>A fictional waffle production line, built for training on ISA-95/ISA-88 concepts, SCADA/MES/LIMS/EAM systems, and IT-OT integration via a Unified Namespace.</footer>
+
+</body>
+</html>

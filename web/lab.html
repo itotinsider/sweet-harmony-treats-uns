@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quality Lab · Waffle Line 01</title>
+<style>
+  /*
+   * A lab-technician / LIMS-style screen, deliberately not another SCADA mimic: a business
+   * app for a person who visits the line, pulls a physical sample, and enters a lab result —
+   * not someone watching live tags. Scope is fixed to the Proofing and Oven stages.
+   */
+  :root {
+    --bg: #f3f5f7;
+    --panel: #ffffff;
+    --border: #dfe4ea;
+    --text: #1f2933;
+    --muted: #64748b;
+    --faint: #94a3b8;
+    --accent: #2563eb;
+    --accent-bg: #eaf1fe;
+    --pass: #16a34a;
+    --pass-bg: #eaf7ee;
+    --fail: #dc2626;
+    --fail-bg: #fbeaea;
+    --warn: #d97706;
+    --warn-bg: #fdf1de;
+    --mono: "SF Mono", Consolas, "Courier New", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--sans); }
+  body { padding: 0 16px 24px; min-height: 100vh; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+    margin: 0 -16px 16px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 800; }
+  header .sub { color: var(--muted); font-size: 11px; }
+  .spacer { flex: 1; }
+  .nav { display: flex; gap: 2px; font: 12px var(--sans); }
+  .nav a, .nav span { padding: 4px 9px; text-decoration: none; color: var(--muted); border: 1px solid transparent; border-radius: 5px; }
+  .nav a:hover { color: var(--text); background: var(--bg); }
+  .nav span.here { color: var(--accent); font-weight: 700; border-color: var(--accent-bg); background: var(--accent-bg); }
+  .tech-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .tech-field input {
+    font: 12px var(--sans); padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; width: 140px;
+  }
+
+  .stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; align-items: start; }
+
+  .stage { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .stage-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .stage-head h2 { margin: 0; font-size: 14px; font-weight: 800; }
+  .adhoc-btn {
+    margin-left: auto; font: 600 11px var(--sans); padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; background: #fff; color: var(--accent); cursor: pointer;
+  }
+  .adhoc-btn:hover { background: var(--accent-bg); }
+  .adhoc-btn:disabled { cursor: not-allowed; color: var(--faint); }
+
+  .queue { padding: 12px 16px; display: grid; gap: 10px; }
+  .queue-empty { padding: 10px 2px; color: var(--muted); font-size: 12px; }
+  .queue-empty b { color: var(--text); font: 700 12px var(--mono); }
+
+  .sample-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #fbfcfd; }
+  .sample-card.overdue { border-color: #f0c98a; background: var(--warn-bg); }
+  .sc-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sc-id { font: 700 12px var(--mono); }
+  .adhoc-tag { font: 700 9px var(--sans); color: var(--accent); background: var(--accent-bg); padding: 1px 5px; border-radius: 4px; letter-spacing: .03em; }
+  .chip { font: 700 10px var(--sans); letter-spacing: .04em; padding: 2px 7px; border-radius: 20px; }
+  .chip-pending { color: var(--accent); background: var(--accent-bg); }
+  .chip-overdue { color: var(--warn); background: #fbe4bb; }
+  .sc-due { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
+
+  .reg-btn {
+    margin-top: 8px; font: 600 11px var(--sans); padding: 6px 12px; border: 1px solid var(--accent);
+    border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  .reg-btn:hover { background: #1d4fd1; }
+
+  .reg-form { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); display: grid; gap: 8px; }
+  .reg-form[hidden] { display: none; }
+  .reg-form .field { display: grid; gap: 3px; }
+  .reg-form label { font: 600 11px var(--sans); color: var(--muted); }
+  .reg-form label .spec { font-weight: 400; color: var(--faint); }
+  .reg-form input, .reg-form select, .reg-form textarea {
+    font: 13px var(--sans); padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  .reg-form textarea { resize: vertical; min-height: 44px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--muted);
+    font: 700 11px var(--sans); letter-spacing: .03em; cursor: pointer; text-transform: uppercase;
+  }
+  .seg button[data-visual="pass"].sel { border-color: var(--pass); background: var(--pass-bg); color: var(--pass); }
+  .seg button[data-visual="fail"].sel { border-color: var(--fail); background: var(--fail-bg); color: var(--fail); }
+  .visual-hint { font-size: 11px; color: var(--fail); min-height: 14px; }
+  .form-actions { display: flex; gap: 8px; margin-top: 2px; }
+  .form-actions button { font: 700 11px var(--sans); padding: 7px 14px; border-radius: 6px; cursor: pointer; }
+  .form-actions [data-submit] { border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+  .form-actions [data-submit]:disabled { opacity: .6; cursor: not-allowed; }
+  .form-actions [data-cancel] { border: 1px solid var(--border); background: #fff; color: var(--muted); }
+
+  .section-label {
+    margin: 4px 16px 0; padding-top: 10px; border-top: 1px solid var(--border);
+    font: 700 10px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  }
+  table.history { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 12px; }
+  table.history th { text-align: left; font: 600 10px var(--sans); letter-spacing: .03em; text-transform: uppercase; color: var(--faint); padding: 0 16px 6px; }
+  table.history td { padding: 7px 16px; border-top: 1px solid var(--border); vertical-align: top; }
+  table.history td.empty { color: var(--muted); text-align: center; }
+  table.history .vals { font: 12px var(--mono); color: var(--text); }
+  table.history .oos { color: var(--fail); font-weight: 700; margin-left: 2px; }
+  .badge { font: 700 10px var(--sans); letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; }
+  .badge-pass { color: var(--pass); background: var(--pass-bg); }
+  .badge-fail { color: var(--fail); background: var(--fail-bg); }
+  .hist-note { margin-top: 3px; color: var(--muted); font-size: 11px; }
+
+  .trends { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 16px 16px; }
+  .trend-card { min-width: 0; }
+  .trend-label { font: 600 10px var(--sans); color: var(--muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  canvas.trend-canvas { display: block; width: 100%; height: 46px; background: #fbfcfd; border: 1px solid var(--border); border-radius: 5px; }
+
+  body.stale .stage { opacity: .55; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Quality Lab</h1>
+    <div class="sub">Waffle Line 01 · Proofing &amp; Oven sampling</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav"><a href="/">&#8962; All systems</a></div>
+  <a href="/exports" target="_blank" rel="noopener" style="font:12px var(--sans); color:var(--muted); text-decoration:none;">Data exports &#8599;</a>
+  <label class="tech-field">Technician <input id="technician" placeholder="your name" autocomplete="off"></label>
+</header>
+
+<div class="stages" id="stages"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const cardEls = {}; // sample id -> card element, kept across polls so an open form is never wiped out
+let serverNow = Date.now() / 1000;
+
+function fmtVal(v) {
+  return v == null ? "—" : (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+}
+function fmtClock(t) {
+  return t == null ? "—" : new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function fmtCountdown(seconds) {
+  if (seconds <= 0) return "due now";
+  const m = Math.floor(seconds / 60), s = Math.round(seconds % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+function fmtAge(seconds) {
+  const m = Math.floor(seconds / 60), s = Math.round(seconds % 60);
+  return m > 0 ? `${m}m ${s}s ago` : `${s}s ago`;
+}
+
+function technicianName() {
+  return $("technician").value.trim();
+}
+
+function buildForm(stage, occ, params) {
+  const form = document.createElement("form");
+  form.className = "reg-form";
+  form.hidden = true;
+  form.innerHTML = `
+    ${params.map((p) => p.options
+      ? `<div class="field"><label>${p.label} <span class="spec">spec ${p.lsl}–${p.usl}</span></label>
+          <select data-param="${p.id}">${p.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></div>`
+      : `<div class="field"><label>${p.label} <span class="spec">spec ${p.lsl}–${p.usl} ${p.unit}</span></label>
+          <input type="number" step="0.1" data-param="${p.id}" placeholder="value in ${p.unit}"></div>`
+    ).join("")}
+    <div class="field">
+      <label>Visual / sensory check</label>
+      <div class="seg"><button type="button" data-visual="pass">Pass</button><button type="button" data-visual="fail">Fail</button></div>
+      <div class="visual-hint"></div>
+    </div>
+    <div class="field"><label>Technician</label><input data-technician value="${technicianName()}" placeholder="your name"></div>
+    <div class="field"><label>Notes</label><textarea data-note placeholder="Optional observations"></textarea></div>
+    <div class="form-actions">
+      <button type="submit" data-submit>Submit result</button>
+      <button type="button" data-cancel>Cancel</button>
+    </div>`;
+
+  form.querySelectorAll("[data-visual]").forEach((btn) => btn.addEventListener("click", () => {
+    form.dataset.visual = btn.dataset.visual;
+    form.querySelectorAll("[data-visual]").forEach((b) => b.classList.toggle("sel", b === btn));
+    form.querySelector(".visual-hint").textContent = "";
+  }));
+  form.querySelector("[data-cancel]").addEventListener("click", () => {
+    form.hidden = true;
+    form.previousElementSibling.hidden = false; // the Register button
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!form.dataset.visual) { form.querySelector(".visual-hint").textContent = "Select Pass or Fail before submitting."; return; }
+    const values = {};
+    form.querySelectorAll("[data-param]").forEach((el) => { values[el.dataset.param] = el.value; });
+    const technician = form.querySelector("[data-technician]").value;
+    const note = form.querySelector("[data-note]").value;
+    const btn = form.querySelector("[data-submit]");
+    btn.disabled = true;
+    try {
+      const res = await fetch(`api/samples/${occ.id}/result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values, visualCheck: form.dataset.visual, note, technician }),
+      });
+      if (!res.ok) { form.querySelector(".visual-hint").textContent = "Could not submit — try again."; btn.disabled = false; return; }
+      try { localStorage.setItem("labTechnician", technician); } catch {}
+      delete cardEls[occ.id];
+      form.closest(".sample-card").remove();
+    } catch {
+      form.querySelector(".visual-hint").textContent = "Could not reach the lab server.";
+      btn.disabled = false;
+    }
+  });
+  return form;
+}
+
+function buildCard(stage, occ, params) {
+  const card = document.createElement("div");
+  card.className = "sample-card";
+  card.dataset.sample = occ.id;
+  const top = document.createElement("div");
+  top.className = "sc-top";
+  top.innerHTML = `<span class="sc-id">${occ.id}</span>${occ.adhoc ? '<span class="adhoc-tag">AD HOC</span>' : ""}<span class="chip" data-chip></span><span class="sc-due" data-due></span>`;
+  const regBtn = document.createElement("button");
+  regBtn.className = "reg-btn";
+  regBtn.textContent = "Register result";
+  regBtn.addEventListener("click", () => {
+    const techField = form.querySelector("[data-technician]");
+    if (!techField.value) techField.value = technicianName();
+    regBtn.hidden = true;
+    form.hidden = false;
+  });
+  const form = buildForm(stage, occ, params);
+  card.append(top, regBtn, form);
+  return card;
+}
+
+function updateCardStatus(card, occ, now) {
+  card.className = `sample-card ${occ.status}`;
+  const chip = card.querySelector("[data-chip]");
+  chip.className = `chip chip-${occ.status}`;
+  chip.textContent = occ.status === "overdue" ? "OVERDUE" : "DUE";
+  const age = now - occ.due_at;
+  card.querySelector("[data-due]").textContent = occ.status === "overdue" ? `overdue by ${fmtAge(age)}` : age > 0 ? `due ${fmtAge(age)}` : "due now";
+}
+
+function renderQueue(stage, data) {
+  const container = document.querySelector(`[data-stage="${stage}"] [data-queue]`);
+  const openIds = new Set(data.open.map((o) => o.id));
+  for (const id of Object.keys(cardEls)) {
+    if (cardEls[id].dataset.stageId === stage && !openIds.has(id)) {
+      cardEls[id].remove();
+      delete cardEls[id];
+    }
+  }
+  if (data.open.length === 0) {
+    let empty = container.querySelector(".queue-empty");
+    if (!empty) { container.innerHTML = ""; empty = document.createElement("div"); empty.className = "queue-empty"; container.appendChild(empty); }
+    const wait = data.next_due - serverNow;
+    empty.innerHTML = `Next sample due in <b>${fmtCountdown(wait)}</b>`;
+    return;
+  }
+  const empty = container.querySelector(".queue-empty");
+  if (empty) empty.remove();
+  for (const occ of data.open) {
+    let card = cardEls[occ.id];
+    if (!card) {
+      card = buildCard(stage, occ, data.params);
+      card.dataset.stageId = stage;
+      cardEls[occ.id] = card;
+      container.appendChild(card);
+    }
+    updateCardStatus(card, occ, serverNow);
+  }
+}
+
+function renderHistory(stage, data) {
+  const tbody = document.querySelector(`[data-stage="${stage}"] [data-history]`);
+  if (!data.history.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No results recorded yet</td></tr>`; return; }
+  tbody.innerHTML = data.history.slice(0, 8).map((h) => `
+    <tr>
+      <td>${fmtClock(h.completed_at)}</td>
+      <td><span class="sc-id">${h.id}</span>${h.adhoc ? ' <span class="adhoc-tag">AD HOC</span>' : ""}
+        ${h.note ? `<div class="hist-note">${h.note.replace(/</g, "&lt;")}</div>` : ""}</td>
+      <td class="vals">${data.params.map((p) => `${fmtVal(h.values[p.id])}${h.checks[p.id] ? "" : '<span class="oos">✕</span>'}`).join(" · ")}</td>
+      <td><span class="badge badge-${h.result}">${h.result.toUpperCase()}</span></td>
+      <td>${h.technician || "—"}</td>
+    </tr>`).join("");
+}
+
+function drawParamTrend(canvas, history, p) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const pts = history.slice(0, 12).reverse().map((r) => r.values[p.id]).filter((v) => v != null);
+  const pad = { l: 5, r: 5, t: 6, b: 6 };
+  if (pts.length < 1) {
+    ctx.fillStyle = "#94a3b8"; ctx.font = "10px sans-serif"; ctx.fillText("no data yet", pad.l, h / 2);
+    return;
+  }
+  const span0 = p.usl - p.lsl || 1;
+  let min = Math.min(...pts, p.lsl), max = Math.max(...pts, p.usl);
+  const pad2 = (max - min) * 0.15 || span0 * 0.15;
+  min -= pad2; max += pad2;
+  const X = (i) => pad.l + (pts.length > 1 ? (i / (pts.length - 1)) * (w - pad.l - pad.r) : (w - pad.l - pad.r) / 2);
+  const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+
+  ctx.fillStyle = "#16a34a14";
+  ctx.fillRect(pad.l, Y(p.usl), w - pad.l - pad.r, Y(p.lsl) - Y(p.usl));
+
+  if (pts.length > 1) {
+    ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5; ctx.beginPath();
+    pts.forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))));
+    ctx.stroke();
+  }
+  pts.forEach((v, i) => {
+    const within = v >= p.lsl && v <= p.usl;
+    ctx.beginPath(); ctx.arc(X(i), Y(v), 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = within ? "#16a34a" : "#dc2626";
+    ctx.fill();
+  });
+}
+
+function renderTrends(stage, data) {
+  const wrap = document.querySelector(`[data-stage="${stage}"] [data-trends]`);
+  wrap.innerHTML = data.params.map((p) => `<div class="trend-card"><div class="trend-label">${p.label}</div><canvas class="trend-canvas" data-canvas="${p.id}"></canvas></div>`).join("");
+  data.params.forEach((p) => drawParamTrend(wrap.querySelector(`[data-canvas="${p.id}"]`), data.history, p));
+}
+
+function buildStage(stage, data) {
+  const section = document.createElement("section");
+  section.className = "stage";
+  section.dataset.stage = stage;
+  section.innerHTML = `
+    <div class="stage-head"><h2>${data.label}</h2><button class="adhoc-btn" data-adhoc>+ Ad hoc sample</button></div>
+    <div class="queue" data-queue></div>
+    <div class="section-label">Recent Results</div>
+    <table class="history"><thead><tr><th>Time</th><th>Sample</th><th>Values</th><th>Result</th><th>Technician</th></tr></thead><tbody data-history></tbody></table>
+    <div class="section-label">Trend (last 12 results)</div>
+    <div class="trends" data-trends></div>`;
+  section.querySelector("[data-adhoc]").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { await fetch(`api/samples/${stage}/adhoc`, { method: "POST" }); } finally { btn.disabled = false; }
+  });
+  return section;
+}
+
+function render(payload) {
+  serverNow = payload.server_time;
+  for (const [stage, data] of Object.entries(payload.stages)) {
+    if (!document.querySelector(`[data-stage="${stage}"]`)) $("stages").appendChild(buildStage(stage, data));
+    renderQueue(stage, data);
+    renderHistory(stage, data);
+    renderTrends(stage, data);
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch("api/samples", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+    document.body.classList.remove("stale");
+  } catch {
+    document.body.classList.add("stale");
+  } finally {
+    setTimeout(poll, 3000);
+  }
+}
+
+try { $("technician").value = localStorage.getItem("labTechnician") || ""; } catch {}
+$("technician").addEventListener("change", () => { try { localStorage.setItem("labTechnician", technicianName()); } catch {} });
+poll();
+</script>
+</body>
+</html>

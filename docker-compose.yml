@@ -1,0 +1,68 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: waffle-line-mosquitto
+    restart: unless-stopped
+    ports:
+      # Published so clients on the host (e.g. the external AI agent) can reach the broker at
+      # localhost:1883. Containers below use the service name "mosquitto" instead.
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+
+  waffle-line-simulator:
+    build: .
+    image: sweet-harmony-treats/waffle-line-simulator:latest
+    container_name: waffle-line-simulator
+    restart: unless-stopped
+    ports:
+      - "8090:8090"   # HMI: http://localhost:8090
+    environment:
+      # The broker's compose service name — "localhost" inside a container is the container itself.
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      PUBLISH_INTERVAL_SECONDS: "5"
+      WEB_PORT: "8090"
+      # Anomaly shape: smooth ramp up, hold, smooth ramp down (~1 min incl. lagging effects).
+      ANOMALY_RAMP_SECONDS: "12"
+      ANOMALY_HOLD_SECONDS: "36"
+      EXPORT_DIR: /app/exports
+    volumes:
+      # The simulated ERP's CSV export — a plain host folder so it's easy to open, and so
+      # Node-RED (below) can read the exact same file.
+      - ./exports:/app/exports
+    depends_on:
+      - mosquitto
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: waffle-line-nodered
+    restart: unless-stopped
+    ports:
+      - "1880:1880"   # Flow editor: http://localhost:1880
+    environment:
+      # Pins the flow filename; the official image otherwise names it after the container's
+      # hostname, which is different every time the container is recreated.
+      FLOWS: flows.json
+    volumes:
+      - ./nodered_data:/data
+      - ./exports:/data/exports:ro
+    depends_on:
+      - mosquitto
+      - waffle-line-simulator
+
+  mqtt-explorer:
+    image: smeagolworms4/mqtt-explorer:latest
+    container_name: waffle-line-mqtt-explorer
+    restart: unless-stopped
+    ports:
+      - "4000:4000"   # Web UI: http://localhost:4000
+    environment:
+      HTTP_PORT: "4000"
+    volumes:
+      # Saved connections persist here across restarts — the broker is at host "mosquitto",
+      # port 1883, no auth (the service name; the browser UI connects server-side).
+      - ./mqtt_explorer_data:/mqtt-explorer/config
+    depends_on:
+      - mosquitto

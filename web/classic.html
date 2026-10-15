@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WAFFLE LINE 01.SCD</title>
+<style>
+  :root {
+    --face: #c0c0c0;      /* classic window/button face */
+    --face-lt: #ffffff;
+    --face-sh: #808080;
+    --face-dk: #404040;
+    --desktop: #008080;   /* Windows 3.1/95 teal desktop */
+    --navy: #000080;
+    --lcd-bg: #0a0a0a;
+    --red: #ff0000;
+    --green: #00ff00;
+    --amber: #ffcc00;
+    --cyan: #00e5ff;
+    --blue: #2255ff;
+    --magenta: #ff33cc;
+    --mono: "Courier New", Consolas, monospace;
+    --ui: Tahoma, Geneva, Verdana, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--desktop); background-image: radial-gradient(#00969633 1px, transparent 1px);
+    background-size: 4px 4px;
+    font: 11px var(--ui); color: #000; padding: 10px; min-height: 100vh;
+  }
+
+  .raised { border: 2px outset var(--face); background: var(--face); }
+  .sunken { border: 2px inset var(--face); background: var(--face); }
+  .well { border: 2px inset var(--face); background: var(--lcd-bg); }
+
+  .win { max-width: 1400px; margin: 0 auto; background: var(--face); border: 2px outset var(--face); box-shadow: 4px 4px 0 #00000055; }
+
+  .titlebar {
+    display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+    background: linear-gradient(90deg, var(--navy), #1084d0);
+    color: #fff; font: 700 12px var(--ui);
+  }
+  .tb-icon { width: 14px; height: 14px; background: repeating-linear-gradient(45deg, var(--amber) 0 3px, #804000 3px 6px); border: 1px solid #fff; flex: none; }
+  .tb-title { flex: 1; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tb-btns { display: flex; gap: 3px; flex: none; }
+  .tb-btn { width: 16px; height: 14px; display: grid; place-items: center; font: 700 10px var(--ui); color: #000; border: 1px outset var(--face); background: var(--face); line-height: 1; }
+
+  .menubar { display: flex; align-items: center; gap: 14px; padding: 3px 8px; border-bottom: 1px solid var(--face-sh); font-size: 11px; }
+  .menubar span { padding: 1px 3px; }
+  .menubar span:hover { background: var(--navy); color: #fff; }
+  .menubar .spacer { flex: 1; }
+  .switch-btn {
+    font: 700 10px var(--ui); text-decoration: none; color: #000; padding: 2px 8px; letter-spacing: .02em;
+  }
+  .switch-btn.raised:active, .switch-btn:active { border-style: inset; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px; border-bottom: 1px solid var(--face-sh); }
+  .tb-box { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font: 700 12px var(--mono); }
+  .led-sq { width: 10px; height: 10px; flex: none; background: #402000; border: 1px solid #000; box-shadow: inset 0 0 0 1px #0006; }
+  .led-sq.on-green { background: var(--green); box-shadow: 0 0 4px var(--green), inset 0 0 0 1px #0006; }
+  .led-sq.on-red { background: var(--red); box-shadow: 0 0 4px var(--red), inset 0 0 0 1px #0006; animation: ledblink 1s steps(2) infinite; }
+  @keyframes ledblink { 50% { opacity: .3; } }
+
+  .ticker { margin: 0 6px 6px; height: 22px; overflow: hidden; background: var(--lcd-bg); border: 2px inset var(--face); position: relative; }
+  .ticker.ok { background: #001a00; }
+  .ticker-track {
+    position: absolute; left: 0; top: 0; white-space: nowrap; padding-left: 100%;
+    font: 700 13px var(--mono); letter-spacing: .04em; line-height: 22px; color: var(--green);
+  }
+  .ticker.alarm .ticker-track { color: var(--red); animation: ticker 14s linear infinite; }
+  .ticker.ok .ticker-track { animation: none; padding-left: 10px; color: var(--green); }
+  @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-200%); } }
+
+  .content { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 8px; padding: 0 6px 6px; }
+  @media (max-width: 980px) { .content { grid-template-columns: minmax(0, 1fr); } }
+  .mimic-area { display: grid; gap: 8px; min-width: 0; }
+  .side-area { display: grid; gap: 8px; align-content: start; }
+
+  .panel-3d { padding: 0; }
+  .panel-title {
+    background: linear-gradient(90deg, var(--navy), #1084d0); color: #fff; font: 700 11px var(--ui);
+    padding: 3px 8px; letter-spacing: .03em; display: flex; justify-content: space-between; gap: 8px;
+  }
+  .panel-title .tagpath { font: 10px var(--mono); color: #cfe6ff; }
+  .panel-body { padding: 8px; }
+
+  /* Area grid (process overview) */
+  .area-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+  .area-box { padding: 0; }
+  .area-head {
+    display: flex; align-items: center; gap: 6px; padding: 3px 7px; background: var(--face-sh); color: #fff;
+    font: 700 10px var(--ui); letter-spacing: .04em; text-transform: uppercase;
+  }
+  .area-box.alarm .area-head { background: var(--red); animation: ledblink 1s steps(2) infinite; }
+  .area-box.stopped .area-head { background: #6a6a6a; }
+  .area-box.stopped .a-val { opacity: .55; }
+  .area-head .ustate { font: 10px var(--mono); color: var(--amber); }
+  .area-head .no { margin-left: auto; font: 10px var(--mono); color: #ddd; }
+  .area-rows { padding: 5px 6px; display: grid; gap: 3px; }
+  .a-row { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 10px; }
+  .a-row span:first-child { color: var(--face-dk); text-transform: uppercase; letter-spacing: .02em; }
+  .a-val { font: 700 12px var(--mono); background: var(--lcd-bg); color: var(--green); padding: 0 4px; border: 1px inset var(--face); min-width: 52px; text-align: right; }
+  .a-val.alarm { color: var(--red); }
+
+  /* Oven mimic */
+  .oven-frame { padding: 0; }
+  .oven-svg-wrap { padding: 8px; overflow-x: auto; background: repeating-linear-gradient(#b8b8b8, #b8b8b8 1px, #c0c0c0 1px, #c0c0c0 20px); }
+  svg.oven { display: block; width: 100%; min-width: 760px; height: auto; }
+  .oven .duct { stroke: var(--blue); stroke-width: 10; fill: none; }
+  .oven .duct-hi { stroke: var(--cyan); stroke-width: 3; stroke-dasharray: 2 5; }
+  .oven .equip { fill: #d9d9c8; stroke: #000; stroke-width: 2; }
+  .oven .zone { fill: #e8c060; stroke: #000; stroke-width: 2; }
+  .oven .zone.alarm { fill: #ff8a4d; }
+  .oven .caption { fill: #000; font: 700 10px var(--ui); letter-spacing: .08em; }
+  .oven .zone-title { fill: #000; font: 700 11px var(--ui); letter-spacing: .06em; }
+  .oven .filter-body { fill: #ffcc00; stroke: #000; stroke-width: 2; }
+  .oven .filter-hatch { stroke: #000; stroke-width: 2; }
+  .oven .t-box { fill: var(--lcd-bg); stroke: #000; stroke-width: 2; }
+  .oven .t-label { fill: #fff; font: 700 8px var(--ui); letter-spacing: .05em; }
+  .oven .t-value { font: 700 15px var(--mono); }
+  .oven .t-value.c-red { fill: var(--red); }
+  .oven .t-value.c-amber { fill: var(--amber); }
+  .oven .t-value.c-cyan { fill: var(--cyan); }
+  .oven .t-value.c-green { fill: var(--green); }
+  .oven .t-unit { fill: #888; font: 700 9px var(--mono); }
+  .oven g.alarm .t-box { stroke: var(--red); stroke-width: 3; }
+  .oven g.alarm .t-value { fill: var(--red) !important; animation: ledblink 1s steps(2) infinite; }
+  .oven .blade { fill: var(--red); }
+  .oven .fan-body { fill: #b0b8c0; stroke: #000; stroke-width: 2; }
+  .oven .belt { stroke: #303030; stroke-width: 10; }
+  .oven .product { stroke: var(--amber); stroke-width: 6; stroke-dasharray: 16 26; }
+  .oven .roller { fill: #888; stroke: #000; stroke-width: 2; }
+
+  /* Utility meters */
+  .meter-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .meter-box { padding: 0; }
+  .meter-box .area-head { background: var(--face-sh); }
+  .meter-box.alarm .area-head { background: var(--red); animation: ledblink 1s steps(2) infinite; }
+  .meter-read { padding: 8px; text-align: right; }
+  .meter-read .big { font: 700 24px var(--mono); border: 1px inset var(--face); background: var(--lcd-bg); padding: 2px 6px; display: block; }
+  .meter-read .unit { font: 10px var(--ui); color: var(--face-dk); }
+  .m-green { color: var(--green); } .m-cyan { color: var(--cyan); } .m-amber { color: var(--amber); } .m-magenta { color: var(--magenta); }
+  .meter-box.alarm .big { color: var(--red) !important; }
+
+  /* Equipment control */
+  .equip-list { display: grid; gap: 6px; }
+  .equip-row { display: flex; align-items: center; gap: 8px; font: 11px var(--ui); }
+  .eq-name { flex: 1; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+  .eq-state { font: 700 10px var(--mono); min-width: 64px; text-align: right; color: var(--face-dk); }
+  .eq-state.running { color: #006600; }
+  .eq-state.starting, .eq-state.stopping { color: #a05a00; }
+  .eq-btn { font: 700 10px var(--ui); padding: 3px 8px; border: 1px outset var(--face); background: var(--face); cursor: pointer; }
+  .eq-btn:active { border-style: inset; }
+
+  /* Fault panel */
+  .fault-panel .panel-body { display: grid; justify-items: center; gap: 8px; padding: 12px 8px; }
+  .big-red-btn {
+    width: 120px; height: 120px; border-radius: 50%; cursor: pointer;
+    background: radial-gradient(circle at 38% 32%, #ff6b6b, #cc0000 55%, #7a0000 100%);
+    border: 4px solid #4d0000; box-shadow: 0 5px 0 #4d0000, 0 8px 10px #0006;
+    color: #fff0f0; font: 700 13px var(--ui); letter-spacing: .04em; text-transform: uppercase;
+  }
+  .big-red-btn:active:not(:disabled) { box-shadow: 0 1px 0 #4d0000; transform: translateY(4px); }
+  .big-red-btn:disabled {
+    cursor: not-allowed; color: #ddd;
+    background: radial-gradient(circle at 38% 32%, #cfcfcf, #9a9a9a 55%, #666 100%); border-color: #555;
+  }
+  .fault-status { font: 700 12px var(--mono); background: var(--lcd-bg); color: var(--amber); border: 2px inset var(--face); padding: 3px 8px; width: 100%; text-align: center; }
+  .bargraph { display: grid; grid-auto-flow: column; gap: 2px; width: 100%; height: 16px; border: 2px inset var(--face); background: var(--lcd-bg); padding: 2px; }
+  .bargraph i { background: #1a1a1a; }
+  .bargraph i.on.g { background: var(--green); }
+  .bargraph i.on.y { background: var(--amber); }
+  .bargraph i.on.r { background: var(--red); }
+  .fault-meta { font: 10px var(--mono); color: var(--face-dk); width: 100%; text-align: center; }
+  .fault-note { font: 10px var(--ui); color: var(--face-dk); text-align: center; margin: 0; }
+
+  /* Log panel */
+  .log-panel .panel-body { padding: 0; }
+  .log-crt { height: 260px; overflow-y: auto; background: var(--lcd-bg); font: 10px var(--mono); padding: 4px 6px; }
+  .log-crt div { padding: 1px 0; border-bottom: 1px dotted #ffffff10; white-space: nowrap; }
+  .log-crt .t-alarm { color: var(--red); }
+  .log-crt .t-clear { color: var(--green); }
+  .log-crt .t-sim { color: var(--amber); }
+  .log-crt .t-empty { color: #555; }
+  .cursor-blink { display: inline-block; width: 7px; background: var(--green); animation: ledblink .8s steps(2) infinite; }
+
+  .statusbar { display: flex; gap: 14px; padding: 3px 8px; border-top: 1px solid var(--face-lt); background: var(--face); font: 10px var(--mono); }
+  .statusbar span { padding: 0 6px; border: 1px inset var(--face); }
+  .statusbar .spacer { flex: 1; border: 0; }
+
+  body.stale .a-val, body.stale .big, body.stale .t-value { opacity: .3; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ticker.alarm .ticker-track, .led-sq.on-red, .area-box.alarm .area-head, .meter-box.alarm .area-head,
+    .oven g.alarm .t-value, .cursor-blink { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="win" id="win">
+  <div class="titlebar">
+    <div class="tb-icon"></div>
+    <div class="tb-title">WAFFLE LINE 01.SCD — Sweet Harmony Treats SCADA v1.0 [CLASSIC VIEW]</div>
+    <div class="tb-btns"><span class="tb-btn">_</span><span class="tb-btn">&#9633;</span><span class="tb-btn">&#215;</span></div>
+  </div>
+  <div class="menubar">
+    <span>File</span><span>Edit</span><span>View</span><span>Alarms</span><span>Trends</span><span>Window</span><span>Help</span>
+    <span class="spacer"></span>
+    <a class="switch-btn raised" href="/">&#8962; ALL SYSTEMS</a>
+  </div>
+
+  <div class="toolbar">
+    <div class="tb-box raised"><span id="date">--/--/----</span>&nbsp;<span id="clock">--:--:--</span></div>
+    <div class="tb-box raised"><span class="led-sq" id="led-comm"></span><span id="comm-text">COMMS: ---</span></div>
+    <div class="tb-box raised"><span class="led-sq" id="led-alarm"></span><span id="alarm-summary">0 ALARMS ACTIVE</span></div>
+  </div>
+
+  <div class="ticker ok" id="ticker"><div class="ticker-track" id="ticker-track">SYSTEM NORMAL — NO ACTIVE ALARMS</div></div>
+
+  <div class="content">
+    <div class="mimic-area">
+      <div class="panel-3d raised">
+        <div class="panel-title">PROCESS OVERVIEW <span class="tagpath">V1.0/SHT/MUNICH/PRODUCTION/WAFFLELINE01</span></div>
+        <div class="panel-body"><div class="area-grid" id="areas"></div></div>
+      </div>
+
+      <div class="panel-3d raised oven-frame">
+        <div class="panel-title">OVEN — BAKING TUNNEL <span class="tagpath">.../OVEN</span></div>
+        <div class="oven-svg-wrap">
+          <svg class="oven" id="oven" viewBox="0 0 1000 360" role="img" aria-label="Oven schematic (classic view)">
+            <text class="caption" x="60" y="16">HUMIDITY CONTROL</text>
+            <text class="caption" x="620" y="16">AIR CIRCULATION</text>
+            <text class="caption" x="60" y="306">BELT DRIVE MODULE</text>
+
+            <path class="duct" d="M340 80 V110 M560 80 V110"/>
+            <rect class="equip" x="300" y="20" width="300" height="60" rx="3"/>
+            <rect class="filter-body" x="314" y="30" width="38" height="40"/>
+            <path class="filter-hatch" d="M316 32 L350 66 M316 44 L338 66 M316 56 L326 66 M328 32 L350 54 M340 32 L350 42"/>
+            <text class="t-label" x="316" y="78" dy="-2" style="font-size:8px;fill:#000">FILTER</text>
+            <text class="zone-title" x="372" y="54">AIR CIRC. UNIT</text>
+
+            <rect class="equip" x="60" y="110" width="880" height="170" rx="3"/>
+            <rect class="zone" id="zone-HeatingZone01" x="66" y="116" width="428" height="158"/>
+            <rect class="zone" id="zone-HeatingZone02" x="506" y="116" width="428" height="158"/>
+            <line x1="500" y1="112" x2="500" y2="278" stroke="#000" stroke-dasharray="6 5" stroke-width="2"/>
+            <text class="zone-title" x="80" y="132">HEATING ZONE 01</text>
+            <text class="zone-title" x="520" y="132">HEATING ZONE 02</text>
+
+            <line class="belt" x1="24" y1="258" x2="976" y2="258"/>
+            <line class="product" id="product" x1="24" y1="252" x2="976" y2="252"/>
+            <circle class="roller" cx="24" cy="258" r="11"/>
+            <circle class="roller" cx="976" cy="258" r="11"/>
+
+            <g id="tags"></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="panel-3d raised">
+        <div class="panel-title">OVEN UTILITY METERING <span class="tagpath">.../OVEN/OVENUTILITYMETERING</span></div>
+        <div class="panel-body"><div class="meter-strip" id="meters"></div></div>
+      </div>
+    </div>
+
+    <div class="side-area">
+      <div class="panel-3d raised">
+        <div class="panel-title">EQUIPMENT CONTROL</div>
+        <div class="panel-body"><div class="equip-list" id="equip-list"></div></div>
+      </div>
+
+      <div class="panel-3d raised fault-panel">
+        <div class="panel-title">FAULT SIMULATION</div>
+        <div class="panel-body">
+          <button class="big-red-btn" id="inject">SIMULATE<br>FAULT</button>
+          <div class="fault-status" id="fault-status">READY</div>
+          <div class="bargraph" id="fault-bar"></div>
+          <div class="fault-meta" id="fault-meta">0 injected</div>
+          <p class="fault-note">Injects a ~1 min energy anomaly. Not published over MQTT — diagnose from process tags.</p>
+        </div>
+      </div>
+
+      <div class="panel-3d raised log-panel">
+        <div class="panel-title">ALARM / EVENT LOG</div>
+        <div class="panel-body"><div class="log-crt" id="log"><div class="t-empty">NO EVENTS YET</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span id="sb-path">WAFFLE LINE 01 &#8250; OVERVIEW</span>
+    <span id="sb-broker">BROKER: —</span>
+    <span class="spacer"></span>
+    <span id="sb-clock">--:--:--</span>
+  </div>
+</div>
+
+<script>
+const AREAS = [
+  { id: "IngredientHandling", title: "Ingredient Handling", tags: [["FlourSiloLevel", "Flour silo"], ["SugarSiloLevel", "Sugar silo"], ["YeastSiloLevel", "Yeast silo"], ["DosingFlowRate", "Dosing flow"], ["WaterFlowRate", "Water flow"]] },
+  { id: "BatterMixing", title: "Batter Mixing", tags: [["MixerSpeed", "Mixer speed"], ["MixerMotorCurrent", "Mixer current"], ["BatterTemperature", "Batter temp"], ["BatterViscosity", "Viscosity"], ["BatchWeight", "Batch weight"]] },
+  { id: "Proofing", title: "Proofing", tags: [["Temperature", "Temperature"], ["RelativeHumidity", "Humidity"], ["ProofingTime", "Proof time"], ["ChamberPressure", "Chamber press"], ["DoughHeight", "Dough height"]] },
+  { id: "Oven", title: "Oven", tags: [["OvenUtilityMetering/ElectricityTotalOven", "Power"], ["OvenUtilityMetering/GasTotalOven", "Gas"], ["BeltDriveModule/BeltSpeed", "Belt speed"]] },
+  { id: "Cooling", title: "Cooling", tags: [["ConveyorSpeed", "Conveyor"], ["ProductTemperature", "Product temp"], ["AmbientTemperature", "Ambient"], ["FanSpeed", "Fan speed"], ["ProductMoisture", "Moisture"]] },
+  { id: "Packaging", title: "Packaging", tags: [["PacksPerMinute", "Packs/min"], ["RejectRate", "Reject rate"], ["SealTemperature", "Seal temp"], ["FilmTension", "Film tension"], ["CartonCount", "Cartons"]] },
+];
+
+const ZONE_TAGS = (zone, dx) => [
+  [`Oven/${zone}/TemperatureTop`, "T TOP", 80 + dx, 145, "red"],
+  [`Oven/${zone}/CirculationFanSpeed`, "CIRC FAN", 360 + dx, 145, "cyan"],
+  [`Oven/${zone}/TemperatureBottom`, "T BOTTOM", 80 + dx, 200, "red"],
+  [`Oven/${zone}/GasBurnerValvePosition`, "BURNER VALVE", 220 + dx, 200, "amber"],
+  [`Oven/${zone}/GasBurnerMassFlow`, "BURNER GAS", 360 + dx, 200, "amber"],
+];
+const OVEN_TAGS = [
+  ["Oven/HumidityControl/RelativeHumidity", "REL. HUMIDITY", 60, 24, "cyan"],
+  ["Oven/HumidityControl/SteamValvePosition", "STEAM VALVE", 186, 24, "cyan"],
+  ["Oven/AirCirculation/DifferentialPressure", "FILTER dP", 620, 24, "amber"],
+  ["Oven/AirCirculation/AirFlow", "AIRFLOW", 746, 24, "cyan"],
+  ["Oven/AirCirculation/ExhaustFanSpeed", "EXHAUST FAN", 872, 24, "cyan"],
+  ...ZONE_TAGS("HeatingZone01", 0),
+  ...ZONE_TAGS("HeatingZone02", 440),
+  ["Oven/BeltDriveModule/BeltSpeed", "BELT SPEED", 60, 314, "green"],
+  ["Oven/BeltDriveModule/MotorCurrent", "MOTOR CURRENT", 186, 314, "amber"],
+  ["Oven/BeltDriveModule/MotorTemperature", "MOTOR TEMP", 312, 314, "red"],
+];
+const FANS = [
+  ["Oven/HeatingZone01/CirculationFanSpeed", 290, 163],
+  ["Oven/HeatingZone02/CirculationFanSpeed", 730, 163],
+  ["Oven/AirCirculation/ExhaustFanSpeed", 568, 50],
+];
+const METERS = [
+  ["Oven/OvenUtilityMetering/ElectricityTotalOven", "Electricity  total oven", "green"],
+  ["Oven/OvenUtilityMetering/ElectricityIncomingMainsCurrent", "Incoming mains current", "amber"],
+  ["Oven/OvenUtilityMetering/GasTotalOven", "Gas  total oven", "cyan"],
+  ["Packaging/PacksPerMinute", "Packs per minute", "magenta"],
+];
+const LIMITS = {
+  "Oven/AirCirculation/DifferentialPressure": { hi: 200, text: "OVEN AIR FILTER dP HIGH" },
+  "Oven/AirCirculation/AirFlow": { lo: 1250, text: "OVEN AIRFLOW LOW" },
+  "Oven/AirCirculation/ExhaustFanSpeed": { hi: 85, text: "OVEN EXHAUST FAN SPEED HIGH" },
+  "Oven/HeatingZone01/CirculationFanSpeed": { hi: 90, text: "ZONE 01 CIRC FAN SPEED HIGH" },
+  "Oven/HeatingZone02/CirculationFanSpeed": { hi: 90, text: "ZONE 02 CIRC FAN SPEED HIGH" },
+  "Oven/OvenUtilityMetering/ElectricityTotalOven": { hi: 100, text: "OVEN ELECTRICAL LOAD HIGH" },
+};
+
+const $ = (id) => document.getElementById(id);
+const SVG_NS = "http://www.w3.org/2000/svg";
+const tagEls = {};
+const alarms = new Map();
+const events = [];
+let latest = null;
+let units = {};
+
+const COUNT_UNITS = new Set(["cartons", "count", "packs"]);
+function fmt(v, unit) {
+  if (v == null || Number.isNaN(v)) return "----";
+  if (COUNT_UNITS.has(unit)) return v.toLocaleString();
+  const a = Math.abs(v);
+  return v.toFixed(a >= 1000 ? 0 : a >= 10 ? 1 : 2);
+}
+function svg(tag, attrs, parent) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+function build() {
+  $("areas").innerHTML = AREAS.map((a, i) => `
+    <div class="area-box raised" id="area-${a.id}">
+      <div class="area-head">${a.title}<span class="ustate" data-ustate></span><span class="no">#${String(i + 1).padStart(2, "0")}</span></div>
+      <div class="area-rows">${a.tags.map(([p, label]) => `<div class="a-row"><span>${label}</span><span class="a-val" data-path="${a.id}/${p}">----</span></div>`).join("")}</div>
+    </div>`).join("");
+
+  $("equip-list").innerHTML = AREAS.map((a) => `
+    <div class="equip-row" data-unit="${a.id}">
+      <span class="eq-name">${a.title}</span>
+      <span class="eq-state" data-state>----</span>
+      <button class="eq-btn" data-btn>----</button>
+    </div>`).join("");
+
+  const group = $("tags");
+  for (const [path, label, x, y, color] of OVEN_TAGS) {
+    const g = svg("g", { transform: `translate(${x} ${y})`, "data-tag": path }, group);
+    svg("rect", { class: "t-box", width: 116, height: 36, rx: 2 }, g);
+    svg("text", { class: "t-label", x: 7, y: 13 }, g).textContent = label;
+    const value = svg("text", { class: `t-value c-${color}`, x: 7, y: 30 }, g);
+    const num = svg("tspan", {}, value);
+    const unit = svg("tspan", { class: "t-unit", dx: 4 }, value);
+    tagEls[path] = { g, num, unit };
+  }
+  for (const fan of FANS) {
+    const g = svg("g", { transform: `translate(${fan[1]} ${fan[2]})` }, group);
+    svg("circle", { class: "fan-body", r: 16 }, g);
+    const blades = svg("g", {}, g);
+    for (const r of [0, 120, 240]) svg("path", { class: "blade", d: "M0 0 C5 -5 5 -11 0 -13 C-4 -10 -4 -5 0 0Z", transform: `rotate(${r})` }, blades);
+    fan.push(blades, 0);
+  }
+
+  $("meters").innerHTML = METERS.map(([p, label, color]) => `
+    <div class="meter-box raised" data-meter="${p}">
+      <div class="area-head">${label}</div>
+      <div class="meter-read"><span class="big m-${color}" data-path="${p}">----</span></div>
+    </div>`).join("");
+
+  $("fault-bar").innerHTML = Array.from({ length: 20 }, () => "<i></i>").join("");
+}
+
+function checkLimit(path, value) {
+  const lim = LIMITS[path];
+  if (!lim) return alarms.has(path);
+  const owner = units[path.split("/")[0]];
+  if (owner && owner.state !== "running") { setAlarm(path, false, lim.text, ""); return false; }
+  if (value == null) return alarms.has(path);
+  const was = alarms.has(path);
+  let active;
+  if (lim.hi != null) active = was ? value > lim.hi * 0.98 : value > lim.hi;
+  else active = was ? value < lim.lo * 1.02 : value < lim.lo;
+  setAlarm(path, active, lim.text, fmt(value));
+  return active;
+}
+function setAlarm(key, active, label, detail) {
+  if (active && !alarms.has(key)) { alarms.set(key, label); logEvent("alarm", `ALARM  ${label} (${detail})`); }
+  if (!active && alarms.has(key)) { alarms.delete(key); logEvent("clear", `CLEAR  ${label}`); }
+}
+function logEvent(type, text) {
+  events.unshift({ time: new Date(), type, text });
+  events.length = Math.min(events.length, 60);
+  $("log").innerHTML = events.map((e) => `<div class="t-${type}">${e.time.toLocaleTimeString([], { hour12: false })}  ${e.text}</div>`).join("") + '<div class="t-empty"><span class="cursor-blink">&nbsp;</span></div>';
+}
+
+function render(s) {
+  const vals = s.values;
+  const get = (p) => vals[p]?.value;
+  units = s.units || {};
+  for (const p of Object.keys(LIMITS)) checkLimit(p, get(p));
+
+  document.querySelectorAll("[data-path]").forEach((el) => {
+    const v = vals[el.dataset.path];
+    el.textContent = v ? fmt(v.value, v.unit) : "----";
+    el.classList.toggle("alarm", alarms.has(el.dataset.path));
+  });
+  document.querySelectorAll("[data-meter]").forEach((el) => el.classList.toggle("alarm", alarms.has(el.dataset.meter)));
+  for (const a of AREAS) {
+    const inAlarm = [...alarms.keys()].some((p) => p.startsWith(a.id + "/"));
+    const u = units[a.id];
+    const state = u?.state ?? "running";
+    const box = $(`area-${a.id}`);
+    box.classList.toggle("alarm", inAlarm);
+    box.classList.toggle("stopped", state === "stopped");
+    box.querySelector("[data-ustate]").textContent = state === "running" ? "" : state.toUpperCase();
+  }
+  renderEquipment();
+  for (const [path, el] of Object.entries(tagEls)) {
+    const v = vals[path];
+    el.num.textContent = v ? fmt(v.value, v.unit) : "----";
+    el.unit.textContent = v ? v.unit : "";
+    el.g.classList.toggle("alarm", alarms.has(path));
+  }
+  document.getElementById("zone-HeatingZone01").classList.toggle("alarm", [...alarms.keys()].some((p) => p.startsWith("Oven/HeatingZone01/")));
+  document.getElementById("zone-HeatingZone02").classList.toggle("alarm", [...alarms.keys()].some((p) => p.startsWith("Oven/HeatingZone02/")));
+
+  const ticker = $("ticker");
+  const active = alarms.size > 0;
+  ticker.classList.toggle("alarm", active);
+  ticker.classList.toggle("ok", !active);
+  $("ticker-track").textContent = active ? [...alarms.values()].map((t) => `*** ${t} ***`).join("     ") : "SYSTEM NORMAL — NO ACTIVE ALARMS";
+  $("alarm-summary").textContent = `${alarms.size} ALARM${alarms.size === 1 ? "" : "S"} ACTIVE`;
+  $("led-alarm").className = `led-sq ${active ? "on-red" : "on-green"}`;
+
+  $("led-comm").className = `led-sq ${s.connected ? "on-green" : "on-red"}`;
+  $("comm-text").textContent = `COMMS: ${s.connected ? "ONLINE" : "OFFLINE"}`;
+  $("sb-broker").textContent = `BROKER: ${s.broker} · ${s.connected ? "CONNECTED" : "OFFLINE"}`;
+
+  renderFault(s.anomaly);
+}
+
+function renderEquipment() {
+  document.querySelectorAll("#equip-list [data-unit]").forEach((row) => {
+    const u = units[row.dataset.unit];
+    if (!u) return;
+    row.dataset.running = u.running ? "1" : "0";
+    const state = row.querySelector("[data-state]");
+    state.textContent = u.state.toUpperCase();
+    state.className = `eq-state ${u.state}`;
+    row.querySelector("[data-btn]").textContent = u.running ? "STOP" : "START";
+  });
+}
+
+function renderFault(a) {
+  const active = a.state !== "idle";
+  const ovenRunning = units.Oven?.state === "running";
+  const btn = $("inject");
+  btn.disabled = active || !ovenRunning;
+  const labels = { idle: "READY", ramp_up: "RAMPING UP", hold: "AT FULL SEVERITY", ramp_down: "RAMPING DOWN", recovery: "SETTLING" };
+  $("fault-status").textContent = active ? `${labels[a.state]} · ${Math.max(0, Math.ceil(a.duration - a.elapsed))}s` : !ovenRunning ? "OVEN STOPPED" : "READY";
+  const frac = active ? Math.min(1, a.elapsed / a.duration) : 0;
+  const lit = Math.round(frac * 20);
+  $("fault-bar").querySelectorAll("i").forEach((el, i) => {
+    el.className = i < lit ? `on ${i < 12 ? "g" : i < 17 ? "y" : "r"}` : "";
+  });
+  $("fault-meta").textContent = `${a.count} injected`;
+}
+
+let lastFrame = performance.now(), beltOffset = 0;
+function animate(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (latest) {
+    for (const fan of FANS) {
+      const speed = latest.values[fan[0]]?.value ?? 0;
+      fan[4] = (fan[4] + speed * 8 * dt) % 360;
+      fan[3].setAttribute("transform", `rotate(${fan[4]})`);
+    }
+    const belt = latest.values["Oven/BeltDriveModule/BeltSpeed"]?.value ?? 0;
+    beltOffset -= belt * 12 * dt;
+    $("product").setAttribute("stroke-dashoffset", beltOffset.toFixed(1));
+  }
+  requestAnimationFrame(animate);
+}
+
+async function poll() {
+  try {
+    const res = await fetch("api/state", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    latest = await res.json();
+    render(latest);
+    document.body.classList.remove("stale");
+  } catch {
+    document.body.classList.add("stale");
+    $("led-comm").className = "led-sq on-red";
+    $("comm-text").textContent = "COMMS: LOST";
+  } finally {
+    setTimeout(poll, 1000);
+  }
+}
+
+$("inject").addEventListener("click", async () => {
+  const btn = $("inject");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/anomaly", { method: "POST" });
+    const body = await res.json();
+    if (res.status === 409) logEvent("sim", `SIM    ${body.error || "Anomaly already in progress"}`);
+    renderFault(body.anomaly);
+  } catch {
+    btn.disabled = false;
+    logEvent("alarm", "SIM    Could not reach simulator");
+  }
+});
+
+$("equip-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-btn]");
+  if (!btn) return;
+  const row = btn.closest("[data-unit]");
+  const id = row.dataset.unit;
+  const running = row.dataset.running === "1";
+  const title = row.querySelector(".eq-name").textContent;
+  btn.disabled = true;
+  try {
+    await fetch(`api/units/${id}/${running ? "stop" : "start"}`, { method: "POST" });
+    logEvent("sim", `SIM    ${title} ${running ? "stopping" : "starting"}`);
+  } catch {
+    logEvent("alarm", "SIM    Could not reach simulator");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+setInterval(() => {
+  const now = new Date();
+  const t = now.toLocaleTimeString([], { hour12: false });
+  const d = now.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" });
+  $("clock").textContent = t; $("date").textContent = d; $("sb-clock").textContent = t;
+}, 1000);
+build();
+poll();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

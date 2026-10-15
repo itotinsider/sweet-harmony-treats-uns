@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waffle Line 01 · HMI</title>
+<style>
+  :root {
+    --bg: #1a1d20;
+    --panel: #23272b;
+    --panel-head: #2b3035;
+    --line: #3a4046;
+    --equip: #6b737b;
+    --equip-fill: #2e3338;
+    --text: #cfd4d9;
+    --muted: #858e96;
+    --value: #f3f5f6;
+    --ok: #3fb950;
+    --warn: #f0b429;
+    --alarm: #ef4444;
+    --sim: #a78bfa;
+    --learn: #2dd4bf;
+    --trend: #7cc4e8;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); }
+  body { padding: 0 16px 16px; min-height: 100vh; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    margin: 0 -16px; padding: 10px 16px; background: #111315; border-bottom: 2px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark { flex: none; width: 38px; height: 38px; }
+  .brand-name {
+    display: block; font-size: 22px; line-height: 1.1; font-weight: 800; letter-spacing: .01em;
+    /* Caramel tones: warm and on-brand, but softer than the amber used for warnings. */
+    background: linear-gradient(90deg, #fbe3b8, #e6a55a 55%, #d9824a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 6px; font: 11px var(--mono); color: var(--muted); text-transform: uppercase; }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 2px #0006; }
+  .led.ok { background: var(--ok); }
+  .led.bad { background: var(--alarm); }
+  .led.off { background: #4a4f54; }
+  .led.transition { background: var(--warn); }
+  .ustate { font: 700 9px var(--mono); color: var(--warn); letter-spacing: .06em; }
+  .area.stopped .row .val { opacity: .5; }
+  .clock { font: 600 15px var(--mono); color: var(--value); }
+  .home-link { display: flex; gap: 6px; }
+  .home-link a { font: 600 11px var(--mono); color: var(--muted); text-decoration: none; border: 1px solid var(--line); padding: 3px 8px; white-space: nowrap; }
+  .home-link a:hover { color: var(--value); border-color: var(--muted); }
+
+  .alarm-banner {
+    display: flex; align-items: center; gap: 10px; margin: 0 -16px 16px; padding: 7px 16px;
+    background: #15181a; border-bottom: 1px solid var(--line); font: 12px var(--mono); min-height: 34px;
+  }
+  .alarm-banner .count { padding: 2px 8px; border: 1px solid var(--line); color: var(--muted); }
+  .alarm-banner.active { background: #3a1416; border-color: var(--alarm); }
+  .alarm-banner.active .count { background: var(--alarm); border-color: var(--alarm); color: #fff; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .45; } }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+  /* Container query, not a media query: the training pane takes width from the page when open. */
+  .main { min-width: 0; container-type: inline-size; }
+  @container (max-width: 1060px) {
+    /* Single column: flatten both columns so the agent KPI card can lead the page. */
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .layout > .col { display: contents; }
+    #agent-card { order: -1; }
+  }
+  .col { display: grid; gap: 16px; min-width: 0; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+  .panel > h2 {
+    margin: 0; padding: 7px 12px; background: var(--panel-head); border-bottom: 1px solid var(--line);
+    font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel > h2 .tag { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10px var(--mono); color: var(--muted); letter-spacing: .04em; text-transform: none; }
+  header .status { min-width: 0; overflow-wrap: anywhere; }
+  .panel-body { padding: 12px; }
+
+  /* Process overview */
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .area { position: relative; border: 1px solid var(--line); background: var(--equip-fill); padding: 8px 10px; }
+  .area h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+  .area .step { font: 10px var(--mono); color: var(--muted); margin-left: auto; }
+  .area.alarm { border-color: var(--alarm); }
+  .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-top: 1px dotted #ffffff10; }
+  .row span:first-child { color: var(--muted); }
+  .val { font: 600 12px var(--mono); color: var(--value); white-space: nowrap; }
+  .val small { color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .val.alarm { color: var(--alarm); }
+
+  /* Oven mimic */
+  .mimic-wrap { overflow-x: auto; }
+  svg.mimic { display: block; width: 100%; min-width: 720px; height: auto; }
+  .mimic .equip { fill: var(--equip-fill); stroke: var(--equip); stroke-width: 2; }
+  .mimic .duct { stroke: var(--equip); stroke-width: 10; fill: none; }
+  .mimic .caption { fill: var(--muted); font: 700 10px var(--sans); letter-spacing: .1em; }
+  .mimic .zone-title { fill: var(--text); font: 700 11px var(--sans); letter-spacing: .1em; }
+  .mimic .t-box { fill: #16191b; stroke: var(--line); stroke-width: 1; }
+  .mimic .t-label { fill: var(--muted); font: 600 9px var(--sans); letter-spacing: .06em; }
+  .mimic .t-value { fill: var(--value); font: 700 14px var(--mono); }
+  .mimic .t-unit { fill: var(--muted); font: 400 10px var(--mono); }
+  .mimic .alarm .t-box { stroke: var(--alarm); stroke-width: 2; }
+  .mimic .alarm .t-value { fill: var(--alarm); }
+  .mimic .blade { fill: var(--equip); }
+  .mimic .belt { stroke: #4a5056; stroke-width: 10; }
+  .mimic .product { stroke: #9c8563; stroke-width: 6; stroke-dasharray: 16 26; }
+
+  /* Utilities */
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .meter { border: 1px solid var(--line); background: #16191b; padding: 8px 10px; }
+  .meter .label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .meter .big { font: 700 22px var(--mono); color: var(--value); }
+  .meter .big small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .meter.alarm { border-color: var(--alarm); }
+  .meter.alarm .big { color: var(--alarm); }
+
+  /* KPI */
+  .kpi-main { display: flex; align-items: baseline; gap: 8px; }
+  .kpi-main .big { font: 700 32px var(--mono); color: var(--value); }
+  .kpi-main .unit { color: var(--muted); font: 12px var(--mono); }
+  .kpi-main.alarm .big { color: var(--alarm); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+  .kpi-grid div { border: 1px solid var(--line); padding: 5px 7px; background: #16191b; }
+  .kpi-grid .label { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  canvas.trend { display: block; width: 100%; height: 170px; background: #16191b; border: 1px solid var(--line); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font: 10px var(--mono); color: var(--muted); }
+  .legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
+
+  /* Agent KPI card */
+  .panel.agent-kpi { border: 1px solid #7a5433; border-left: 4px solid #e6a55a; }
+  .panel.agent-kpi > h2 { background: #30261d; border-bottom-color: #5a3f27; color: #f3d3a5; }
+  .agent-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+  .agent-value .big { font: 800 48px/1 var(--mono); color: var(--value); letter-spacing: -.02em; }
+  .agent-value .unit { font: 13px var(--mono); color: var(--muted); }
+  .agent-sub { margin-top: 6px; font: 600 13px var(--mono); color: #e6a55a; }
+  .agent-sub small { color: var(--muted); font-weight: 400; }
+  canvas.spark { display: block; width: 100%; height: 72px; margin: 12px 0 8px; background: #16191b; border: 1px solid var(--line); }
+  .agent-meta { display: flex; justify-content: space-between; gap: 8px; font: 11px var(--mono); color: var(--muted); }
+  .agent-topic { margin-top: 6px; font: 10px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .agent-topic .warn { color: var(--warn); }
+  .led.stale { background: var(--warn); }
+  .panel.agent-kpi.stale .big, .panel.agent-kpi.waiting .big { color: var(--muted); }
+
+  /* Equipment control */
+  .equip-list { display: grid; gap: 6px; }
+  .equip-row { display: flex; align-items: center; gap: 8px; }
+  .eq-name { flex: 1; font-size: 12px; }
+  .eq-state { font: 700 10px var(--mono); letter-spacing: .04em; color: var(--muted); min-width: 66px; text-align: right; }
+  .eq-state.running { color: var(--ok); }
+  .eq-state.starting, .eq-state.stopping { color: var(--warn); }
+  .eq-btn { font: 600 11px var(--mono); padding: 3px 10px; border: 1px solid var(--line); background: #16191b; color: var(--text); cursor: pointer; }
+  .eq-btn:hover { border-color: var(--muted); }
+  .eq-btn:disabled { cursor: not-allowed; color: var(--muted); }
+
+  /* Simulation control */
+  .panel.sim { border-color: #5b4a8a; }
+  .panel.sim > h2 { background: #2d2640; }
+  .sim-badge { font: 700 9px var(--mono); padding: 1px 5px; border: 1px solid var(--sim); color: var(--sim); letter-spacing: .08em; }
+  button.inject {
+    width: 100%; padding: 12px; border: 2px solid var(--sim); background: #3b2f5c; color: #fff; cursor: pointer;
+    font: 700 13px var(--sans); letter-spacing: .06em; text-transform: uppercase;
+  }
+  button.inject:hover:not(:disabled) { background: #4a3a75; }
+  button.inject:disabled { cursor: not-allowed; border-color: var(--line); background: #2a2d31; color: var(--muted); }
+  .phases { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 12px 0 6px; }
+  .phases span { text-align: center; padding: 4px 0; font: 9px var(--mono); text-transform: uppercase; border: 1px solid var(--line); color: var(--muted); }
+  .phases span.on { border-color: var(--sim); color: #fff; background: #3b2f5c; }
+  .progress { height: 6px; background: #16191b; border: 1px solid var(--line); }
+  .progress div { height: 100%; width: 0; background: var(--sim); transition: width 1s linear; }
+  .sim-meta { display: flex; justify-content: space-between; margin-top: 6px; font: 11px var(--mono); color: var(--muted); }
+  .note { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
+
+  /* Event log */
+  .log { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; font: 11px var(--mono); }
+  .log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 4px 12px; border-bottom: 1px solid #ffffff0a; }
+  .log time { color: var(--muted); }
+  .log .alarm { color: var(--alarm); }
+  .log .clear { color: var(--ok); }
+  .log .sim { color: var(--sim); }
+  .log .empty { color: var(--muted); display: block; }
+
+  body.stale .val, body.stale .big, body.stale .t-value { opacity: .35; }
+
+  /* Training pane */
+  .shell { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; align-items: start; transition: grid-template-columns .2s ease; }
+  body.learn-open .shell { grid-template-columns: 330px minmax(0, 1fr); }
+  .panel.learn {
+    position: sticky; top: 16px; display: flex; flex-direction: column; max-height: calc(100vh - 32px);
+    border-left: 4px solid var(--learn); overflow: hidden;
+  }
+  .learn > h2 { background: #14302c; border-bottom-color: #21534c; color: #9be9dd; flex: none; }
+  .learn-toggle {
+    flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid #21534c; background: #0f2421; color: #9be9dd;
+    cursor: pointer; font: 700 14px/1 var(--mono);
+  }
+  .learn-toggle:hover { background: #1b423d; }
+  .learn-toggle::before { content: "\2039"; }
+  body:not(.learn-open) .learn-toggle::before { content: "\203A"; }
+  .learn-body { overflow-y: auto; min-height: 0; }
+  body:not(.learn-open) .learn-body { display: none; }
+  body:not(.learn-open) .learn { min-height: 150px; }
+  body:not(.learn-open) .learn > h2 { flex-direction: column; padding: 8px 0; height: 100%; border-bottom: 0; }
+  body:not(.learn-open) .learn-title { writing-mode: vertical-rl; letter-spacing: .2em; }
+  .learn-intro { margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  .lesson { border-bottom: 1px solid var(--line); }
+  .lesson-head {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; background: none;
+    color: var(--text); font: 600 12px var(--sans); text-align: left; cursor: pointer;
+  }
+  .lesson-head:hover { background: #ffffff08; }
+  .lesson-head .n { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--line); font: 700 10px var(--mono); color: var(--muted); }
+  .lesson-head .chev { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
+  .lesson-head .chev::before { content: "+"; }
+  .lesson.open .lesson-head { color: #fff; background: #14302c; }
+  .lesson.open .lesson-head .n { border-color: var(--learn); color: var(--learn); }
+  .lesson.open .lesson-head .chev::before { content: "\2212"; }
+  .lesson-body { padding: 4px 12px 12px; }
+  .lesson-body p { margin: 8px 0; font-size: 12px; color: var(--muted); }
+  .lesson-body code { font: 11px var(--mono); color: var(--value); overflow-wrap: anywhere; }
+
+  /* Equipment tree: connectors are drawn per item so the last branch ends cleanly. */
+  .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree ul { margin-left: 9px; padding-left: 16px; }
+  .tree li { position: relative; }
+  .tree ul > li::before { content: ""; position: absolute; left: -16px; top: 13px; width: 12px; border-top: 1px solid var(--line); }
+  .tree ul > li::after { content: ""; position: absolute; left: -16px; top: 0; bottom: 0; border-left: 1px solid var(--line); }
+  .tree ul > li:last-child::after { bottom: auto; height: 13px; }
+  .node {
+    display: block; width: 100%; padding: 4px 7px; border: 1px solid transparent; background: none; color: var(--text);
+    font: 12px/1.35 var(--sans); text-align: left; cursor: pointer;
+  }
+  button.node:hover { background: #ffffff0d; }
+  button.node.sel { border-color: var(--learn); background: #14302c; color: #fff; }
+  .node.ghost { color: var(--muted); cursor: default; }
+  .topic-line { margin-top: 10px; padding: 6px 8px; background: #16191b; border: 1px solid var(--line); font: 10px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .topic-line code { display: block; color: var(--learn); }
+
+  /* Highlight of the SCADA elements the selected node points at */
+  .hl { position: relative; outline: 2px solid var(--learn); outline-offset: 3px; animation: hl-pulse 1.8s ease-in-out infinite; }
+  @keyframes hl-pulse { 0%, 100% { box-shadow: 0 0 0 0 #2dd4bf66; } 50% { box-shadow: 0 0 0 7px #2dd4bf00; } }
+  .mimic .hl { outline: 0; animation: none; }
+  .mimic .zone-hl { fill: none; stroke: none; pointer-events: none; }
+  .mimic .zone-hl.hl { fill: #2dd4bf1f; stroke: var(--learn); stroke-width: 3; }
+  .mimic .equip.hl { stroke: var(--learn); stroke-width: 3; }
+  .mimic g.hl:not(.alarm) .t-box { stroke: var(--learn); stroke-width: 3; }
+  @media (prefers-reduced-motion: reduce) { .hl { animation: none; } .shell { transition: none; } }
+  @media (max-width: 800px) {
+    .shell, body.learn-open .shell { grid-template-columns: minmax(0, 1fr); }
+    .panel.learn { position: static; max-height: none; }
+    body:not(.learn-open) .learn { min-height: 0; }
+    body:not(.learn-open) .learn > h2 { flex-direction: row; padding: 7px 12px; height: auto; border-bottom: 1px solid var(--line); }
+    body:not(.learn-open) .learn-title { writing-mode: horizontal-tb; letter-spacing: .1em; }
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 38 38" aria-hidden="true">
+      <defs>
+        <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fbe3b8"/><stop offset="1" stop-color="#d9824a"/>
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="32" height="32" rx="8" fill="url(#brand-grad)"/>
+      <path d="M13.7 7v24M24.3 7v24M7 13.7h24M7 24.3h24" stroke="#7a4a24" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>
+    </svg>
+    <div><span class="brand-name">Sweet Harmony Treats</span><small>Munich · Waffle Line 01 — Process Overview</small></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="status"><span class="led" id="led-broker"></span><span id="broker-text">Broker —</span></div>
+  <div class="status"><span class="led" id="led-hmi"></span><span id="hmi-text">HMI link</span></div>
+  <div class="home-link"><a href="/">&#8962; All systems</a></div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<div class="alarm-banner" id="alarm-banner">
+  <span class="count" id="alarm-count">0 ALARMS</span>
+  <span id="alarm-text">No active alarms</span>
+</div>
+
+<div class="shell">
+<aside class="panel learn" id="learn" aria-label="Training">
+  <h2>
+    <button class="learn-toggle" id="learn-toggle" aria-expanded="true" aria-controls="learn-body" title="Collapse training pane"></button>
+    <span class="learn-title">Training</span>
+  </h2>
+  <div class="learn-body" id="learn-body">
+    <p class="learn-intro">Pick an item to see it explained here and marked on the SCADA.</p>
+    <div id="lessons"></div>
+  </div>
+</aside>
+<main class="main">
+<div class="layout">
+  <div class="col">
+    <section class="panel" id="panel-overview">
+      <h2>Line Overview <span class="tag">v1.0/SHT/Munich/Production/WaffleLine01</span></h2>
+      <div class="panel-body"><div class="flow" id="flow"></div></div>
+    </section>
+
+    <section class="panel" id="panel-oven">
+      <h2>Oven <span class="tag">…/WaffleLine01/Oven</span></h2>
+      <div class="panel-body mimic-wrap">
+        <svg class="mimic" id="mimic" viewBox="0 0 1000 360" role="img" aria-label="Oven schematic">
+          <text class="caption" x="60" y="16">HUMIDITY CONTROL</text>
+          <text class="caption" x="620" y="16">AIR CIRCULATION</text>
+          <text class="caption" x="60" y="306">BELT DRIVE MODULE</text>
+
+          <!-- Air circulation unit with filter and exhaust fan -->
+          <path class="duct" d="M340 80 V110 M560 80 V110"/>
+          <rect class="equip" id="unit-air" x="300" y="20" width="300" height="60" rx="3"/>
+          <defs>
+            <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#6b737b" stroke-width="2"/>
+            </pattern>
+          </defs>
+          <rect x="314" y="30" width="38" height="40" fill="url(#hatch)" stroke="#6b737b"/>
+          <text class="t-label" x="316" y="78" dy="-2" style="font-size:8px">FILTER</text>
+          <text class="zone-title" x="372" y="54">AIR CIRC. UNIT</text>
+
+          <!-- Oven body -->
+          <rect class="equip" x="60" y="110" width="880" height="170" rx="3"/>
+          <rect class="zone-hl" id="zone-HeatingZone01" x="62" y="112" width="436" height="166"/>
+          <rect class="zone-hl" id="zone-HeatingZone02" x="502" y="112" width="436" height="166"/>
+          <line x1="500" y1="112" x2="500" y2="278" stroke="#6b737b" stroke-dasharray="6 5"/>
+          <text class="zone-title" x="80" y="132">HEATING ZONE 01</text>
+          <text class="zone-title" x="520" y="132">HEATING ZONE 02</text>
+
+          <!-- Belt -->
+          <line class="belt" x1="24" y1="258" x2="976" y2="258"/>
+          <line class="product" id="product" x1="24" y1="252" x2="976" y2="252"/>
+          <circle class="equip" cx="24" cy="258" r="11"/>
+          <circle class="equip" cx="976" cy="258" r="11"/>
+
+          <g id="tags"></g>
+        </svg>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-meters">
+      <h2>Oven Utility Metering <span class="tag">…/Oven/OvenUtilityMetering</span></h2>
+      <div class="panel-body"><div class="meters" id="meters"></div></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel agent-kpi waiting" id="agent-card">
+      <h2><span class="led" id="agent-led"></span>Energy Consumption per Pack <span class="tag">AGENT</span></h2>
+      <div class="panel-body">
+        <div class="agent-value"><span class="big" id="agent-value">—</span><span class="unit">kW·min / pack</span></div>
+        <div class="agent-sub" id="agent-kwh">≈ — <small>kWh / pack</small></div>
+        <canvas class="spark" id="agent-spark"></canvas>
+        <div class="agent-meta"><span id="agent-age">Waiting for first message…</span><span id="agent-count">0 msgs</span></div>
+        <div class="agent-topic" id="agent-topic">…/KPIs/EnergyConsumptionPerPack</div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-sec">
+      <h2>Specific Energy Consumption <span class="tag">Simulator · SMA <span id="kpi-window">20</span></span></h2>
+      <div class="panel-body">
+        <div class="kpi-main" id="kpi-main"><span class="big" id="kpi-sma">—</span><span class="unit">kWh / pack</span></div>
+        <div class="kpi-grid">
+          <div><div class="label">Instant</div><div class="val" id="kpi-sec">—</div></div>
+          <div><div class="label">Baseline</div><div class="val" id="kpi-base">—</div></div>
+          <div><div class="label">Deviation</div><div class="val" id="kpi-dev">—</div></div>
+        </div>
+        <canvas class="trend" id="trend"></canvas>
+        <div class="legend">
+          <span><i style="border-color:#5d666e"></i>Instant</span>
+          <span><i style="border-color:var(--trend)"></i>SMA 20</span>
+          <span><i style="border-color:var(--muted);border-top-style:dashed"></i>Baseline</span>
+          <span><i style="border-color:var(--warn);border-top-style:dashed"></i>+15%</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-equipment">
+      <h2>Equipment Control</h2>
+      <div class="panel-body"><div class="equip-list" id="equip-list"></div></div>
+    </section>
+
+    <section class="panel sim" id="panel-sim">
+      <h2><span class="sim-badge">SIM</span> Simulation Control</h2>
+      <div class="panel-body">
+        <button class="inject" id="inject">⚡ Generate energy anomaly</button>
+        <div class="phases" id="phases">
+          <span data-state="idle">Idle</span>
+          <span data-state="ramp_up">Ramp</span>
+          <span data-state="hold">Hold</span>
+          <span data-state="ramp_down">Ramp</span>
+          <span data-state="recovery">Settle</span>
+        </div>
+        <div class="progress"><div id="sim-progress"></div></div>
+        <div class="sim-meta"><span id="sim-status">Waiting for trigger</span><span id="sim-count">0 injected</span></div>
+        <p class="note">Injects one smooth, ~1 minute energy anomaly, then returns to normal. Nothing about the injection is published over MQTT — the cause must be diagnosed from process topics.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-log">
+      <h2>Event Log</h2>
+      <ul class="log" id="log"><li><span class="empty">No events yet</span></li></ul>
+    </section>
+  </div>
+</div>
+</main>
+</div>
+
+<script>
+const AREAS = [
+  { id: "IngredientHandling", title: "Ingredient Handling", tags: [["FlourSiloLevel", "Flour silo"], ["SugarSiloLevel", "Sugar silo"], ["YeastSiloLevel", "Yeast silo"], ["DosingFlowRate", "Dosing flow"], ["WaterFlowRate", "Water flow"]] },
+  { id: "BatterMixing", title: "Batter Mixing", tags: [["MixerSpeed", "Mixer speed"], ["MixerMotorCurrent", "Mixer current"], ["BatterTemperature", "Batter temp"], ["BatterViscosity", "Viscosity"], ["BatchWeight", "Batch weight"]] },
+  { id: "Proofing", title: "Proofing", tags: [["Temperature", "Temperature"], ["RelativeHumidity", "Humidity"], ["ProofingTime", "Proof time"], ["ChamberPressure", "Chamber press"], ["DoughHeight", "Dough height"]] },
+  { id: "Oven", title: "Oven", tags: [["OvenUtilityMetering/ElectricityTotalOven", "Power"], ["OvenUtilityMetering/GasTotalOven", "Gas"], ["BeltDriveModule/BeltSpeed", "Belt speed"]] },
+  { id: "Cooling", title: "Cooling", tags: [["ConveyorSpeed", "Conveyor"], ["ProductTemperature", "Product temp"], ["AmbientTemperature", "Ambient"], ["FanSpeed", "Fan speed"], ["ProductMoisture", "Moisture"]] },
+  { id: "Packaging", title: "Packaging", tags: [["PacksPerMinute", "Packs/min"], ["RejectRate", "Reject rate"], ["SealTemperature", "Seal temp"], ["FilmTension", "Film tension"], ["CartonCount", "Cartons"]] },
+];
+
+const ZONE_TAGS = (zone, dx) => [
+  [`Oven/${zone}/TemperatureTop`, "T TOP", 80 + dx, 145],
+  [`Oven/${zone}/CirculationFanSpeed`, "CIRC FAN", 360 + dx, 145],
+  [`Oven/${zone}/TemperatureBottom`, "T BOTTOM", 80 + dx, 200],
+  [`Oven/${zone}/GasBurnerValvePosition`, "BURNER VALVE", 220 + dx, 200],
+  [`Oven/${zone}/GasBurnerMassFlow`, "BURNER GAS", 360 + dx, 200],
+];
+const OVEN_TAGS = [
+  ["Oven/HumidityControl/RelativeHumidity", "REL. HUMIDITY", 60, 24],
+  ["Oven/HumidityControl/SteamValvePosition", "STEAM VALVE", 186, 24],
+  ["Oven/AirCirculation/DifferentialPressure", "FILTER ΔP", 620, 24],
+  ["Oven/AirCirculation/AirFlow", "AIRFLOW", 746, 24],
+  ["Oven/AirCirculation/ExhaustFanSpeed", "EXHAUST FAN", 872, 24],
+  ...ZONE_TAGS("HeatingZone01", 0),
+  ...ZONE_TAGS("HeatingZone02", 440),
+  ["Oven/BeltDriveModule/BeltSpeed", "BELT SPEED", 60, 314],
+  ["Oven/BeltDriveModule/MotorCurrent", "MOTOR CURRENT", 186, 314],
+  ["Oven/BeltDriveModule/MotorTemperature", "MOTOR TEMP", 312, 314],
+];
+// [path for speed, x, y]
+const FANS = [
+  ["Oven/HeatingZone01/CirculationFanSpeed", 290, 163],
+  ["Oven/HeatingZone02/CirculationFanSpeed", 730, 163],
+  ["Oven/AirCirculation/ExhaustFanSpeed", 568, 50],
+];
+const METERS = [
+  ["Oven/OvenUtilityMetering/ElectricityTotalOven", "Electricity · total oven"],
+  ["Oven/OvenUtilityMetering/ElectricityIncomingMainsCurrent", "Incoming mains current"],
+  ["Oven/OvenUtilityMetering/GasTotalOven", "Gas · total oven"],
+  ["Packaging/PacksPerMinute", "Packs per minute"],
+];
+// Process alarm limits with a 2% deadband for clearing.
+const LIMITS = {
+  "Oven/AirCirculation/DifferentialPressure": { hi: 200, text: "Oven air filter differential pressure HIGH" },
+  "Oven/AirCirculation/AirFlow": { lo: 1250, text: "Oven airflow LOW" },
+  "Oven/AirCirculation/ExhaustFanSpeed": { hi: 85, text: "Oven exhaust fan speed HIGH" },
+  "Oven/HeatingZone01/CirculationFanSpeed": { hi: 90, text: "Zone 01 circulation fan speed HIGH" },
+  "Oven/HeatingZone02/CirculationFanSpeed": { hi: 90, text: "Zone 02 circulation fan speed HIGH" },
+  "Oven/OvenUtilityMetering/ElectricityTotalOven": { hi: 100, text: "Oven electrical load HIGH" },
+};
+const SEC_LIMIT = 1.15;
+
+const $ = (id) => document.getElementById(id);
+const SVG_NS = "http://www.w3.org/2000/svg";
+const tagEls = {};
+const alarms = new Map(); // key -> alarm description, in raise order
+const events = [];
+let latest = null;
+let lastAnomalyState = null;
+let units = {}; // area id -> {label, running, state, factor}, from the last poll
+
+const COUNT_UNITS = new Set(["cartons", "count", "packs"]);
+
+function fmt(v, unit) {
+  if (v == null || Number.isNaN(v)) return "—";
+  if (COUNT_UNITS.has(unit)) return v.toLocaleString();
+  const a = Math.abs(v);
+  return v.toFixed(a >= 1000 ? 0 : a >= 10 ? 1 : 2);
+}
+
+function svg(tag, attrs, parent) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+function build() {
+  $("flow").innerHTML = AREAS.map((a, i) => `
+    <div class="area" id="area-${a.id}">
+      <h3><span class="led" data-led></span>${a.title}<span class="ustate" data-ustate></span><span class="step">${String(i + 1).padStart(2, "0")}</span></h3>
+      ${a.tags.map(([p, label]) => `<div class="row"><span>${label}</span><span class="val" data-path="${a.id}/${p}">—</span></div>`).join("")}
+    </div>`).join("");
+
+  $("equip-list").innerHTML = AREAS.map((a) => `
+    <div class="equip-row" data-unit="${a.id}">
+      <span class="eq-name">${a.title}</span>
+      <span class="eq-state" data-state>—</span>
+      <button class="eq-btn" data-btn>—</button>
+    </div>`).join("");
+
+  const group = $("tags");
+  for (const [path, label, x, y] of OVEN_TAGS) {
+    const g = svg("g", { transform: `translate(${x} ${y})`, "data-tag": path }, group);
+    svg("rect", { class: "t-box", width: 116, height: 36, rx: 2 }, g);
+    svg("text", { class: "t-label", x: 7, y: 13 }, g).textContent = label;
+    const value = svg("text", { class: "t-value", x: 7, y: 30 }, g);
+    const num = svg("tspan", {}, value);
+    const unit = svg("tspan", { class: "t-unit", dx: 4 }, value);
+    tagEls[path] = { g, num, unit };
+  }
+  for (const fan of FANS) {
+    const g = svg("g", { transform: `translate(${fan[1]} ${fan[2]})` }, group);
+    svg("circle", { class: "equip", r: 16 }, g);
+    const blades = svg("g", {}, g);
+    for (const r of [0, 120, 240]) svg("path", { class: "blade", d: "M0 0 C5 -5 5 -11 0 -13 C-4 -10 -4 -5 0 0Z", transform: `rotate(${r})` }, blades);
+    fan.push(blades, 0);
+  }
+
+  $("meters").innerHTML = METERS.map(([p, label]) => `
+    <div class="meter" data-meter="${p}"><div class="label">${label}</div><div class="big" data-path="${p}">—</div></div>`).join("");
+}
+
+function checkLimit(path, value) {
+  const lim = LIMITS[path];
+  if (!lim) return alarms.has(path);
+  const owner = units[path.split("/")[0]];
+  if (owner && owner.state !== "running") { setAlarm(path, false, lim.text, ""); return false; }
+  if (value == null) return alarms.has(path);
+  const was = alarms.has(path);
+  let active;
+  if (lim.hi != null) active = was ? value > lim.hi * 0.98 : value > lim.hi;
+  else active = was ? value < lim.lo * 1.02 : value < lim.lo;
+  setAlarm(path, active, lim.text, fmt(value));
+  return active;
+}
+
+function setAlarm(key, active, label, detail) {
+  if (active && !alarms.has(key)) { alarms.set(key, label); logEvent("alarm", `ALARM  ${label} (${detail})`); }
+  if (!active && alarms.has(key)) { alarms.delete(key); logEvent("clear", `CLEAR  ${label}`); }
+}
+
+function logEvent(type, text) {
+  events.unshift({ time: new Date(), type, text });
+  events.length = Math.min(events.length, 60);
+  $("log").innerHTML = events.map((e) => `<li><time>${e.time.toLocaleTimeString([], { hour12: false })}</time><span class="${e.type}">${e.text}</span></li>`).join("");
+}
+
+function render(s) {
+  const vals = s.values;
+  const get = (p) => vals[p]?.value;
+  units = s.units || {};
+
+  // Evaluate process alarms first so every widget can use them.
+  for (const p of Object.keys(LIMITS)) checkLimit(p, get(p));
+
+  document.querySelectorAll("[data-path]").forEach((el) => {
+    const p = el.dataset.path;
+    const v = vals[p];
+    el.innerHTML = v ? `${fmt(v.value, v.unit)}<small>${v.unit}</small>` : "—";
+    el.classList.toggle("alarm", alarms.has(p));
+  });
+  document.querySelectorAll("[data-meter]").forEach((el) => el.classList.toggle("alarm", alarms.has(el.dataset.meter)));
+  for (const a of AREAS) {
+    const inAlarm = [...alarms.keys()].some((p) => p.startsWith(a.id + "/"));
+    const u = units[a.id];
+    const state = u?.state ?? "running";
+    const card = $(`area-${a.id}`);
+    card.classList.toggle("alarm", inAlarm);
+    card.classList.toggle("stopped", state === "stopped");
+    card.querySelector("[data-led]").className = `led ${inAlarm ? "bad" : state === "running" ? "ok" : state === "stopped" ? "off" : "transition"}`;
+    card.querySelector("[data-ustate]").textContent = state === "running" ? "" : state.toUpperCase();
+  }
+  renderEquipment();
+  for (const [path, el] of Object.entries(tagEls)) {
+    const v = vals[path];
+    el.num.textContent = v ? fmt(v.value, v.unit) : "—";
+    el.unit.textContent = v ? v.unit : "";
+    el.g.classList.toggle("alarm", alarms.has(path));
+  }
+
+  // KPI
+  const k = s.kpi;
+  $("kpi-window").textContent = k.window;
+  $("kpi-sma").textContent = k.sma != null ? k.sma.toFixed(4) : "—";
+  $("kpi-sec").textContent = k.sec != null ? k.sec.toFixed(4) : "—";
+  $("kpi-base").textContent = k.baseline != null ? k.baseline.toFixed(4) : "—";
+  const dev = k.sma != null && k.baseline ? (k.sma / k.baseline - 1) * 100 : null;
+  $("kpi-dev").textContent = dev != null ? `${dev >= 0 ? "+" : ""}${dev.toFixed(1)}%` : "—";
+  const secHigh = dev != null && (alarms.has("SEC") ? dev > (SEC_LIMIT - 1) * 100 - 2 : dev > (SEC_LIMIT - 1) * 100);
+  setAlarm("SEC", secHigh, "Specific energy consumption HIGH", `${dev?.toFixed(1)}% vs baseline`);
+  $("kpi-main").classList.toggle("alarm", secHigh);
+  $("kpi-dev").classList.toggle("alarm", secHigh);
+  drawTrend(k);
+
+  // Alarm banner
+  const banner = $("alarm-banner");
+  banner.classList.toggle("active", alarms.size > 0);
+  $("alarm-count").textContent = `${alarms.size} ALARM${alarms.size === 1 ? "" : "S"}`;
+  $("alarm-text").textContent = alarms.size ? [...alarms.values()].join("  ·  ") : "No active alarms";
+
+  // Header
+  $("led-broker").className = `led ${s.connected ? "ok" : "bad"}`;
+  $("broker-text").textContent = `Broker ${s.broker} · ${s.connected ? "connected" : "offline"}`;
+
+  renderAnomaly(s.anomaly);
+  renderAgentKpi(s.agent_kpi);
+}
+
+const AGENT_STALE_SECONDS = 10;
+
+function renderAgentKpi(a) {
+  const card = $("agent-card");
+  const waiting = a.value == null;
+  const stale = !waiting && a.age > AGENT_STALE_SECONDS;
+  card.classList.toggle("waiting", waiting);
+  card.classList.toggle("stale", stale);
+  $("agent-led").className = `led ${waiting ? "" : stale ? "stale" : "ok"}`;
+  $("agent-value").textContent = waiting ? "—" : a.value.toFixed(4);
+  // The agent divides kW by packs per minute, so dividing by 60 gives kWh per pack.
+  $("agent-kwh").innerHTML = `≈ ${waiting ? "—" : (a.value / 60).toFixed(5)} <small>kWh / pack</small>`;
+  $("agent-age").textContent = waiting ? "Waiting for first message…" : stale ? `STALE · last update ${Math.round(a.age)} s ago` : `Updated ${a.age.toFixed(0)} s ago`;
+  $("agent-count").textContent = `${a.count} msgs`;
+
+  const topic = a.topic.replace("v1.0/SHT/Munich/Production/WaffleLine01", "…");
+  const spaced = a.received_topic && a.received_topic !== a.topic;
+  $("agent-topic").innerHTML = spaced
+    ? `${topic}<span class="warn">␠</span> <span class="warn">· received with trailing space</span>`
+    : topic;
+  drawSpark($("agent-spark"), a.history);
+}
+
+function drawSpark(canvas, hist) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (hist.length < 2) return;
+
+  // Span up to 5 minutes, but fill the width while fewer points exist.
+  const t1 = hist[hist.length - 1][0], t0 = Math.max(hist[0][0], t1 - 300_000);
+  const pts = hist.filter((p) => p[0] >= t0);
+  const vs = pts.map((p) => p[1]);
+  let min = Math.min(...vs), max = Math.max(...vs);
+  const span = (max - min) || Math.abs(max) * 0.01 || 1;
+  min -= span * 0.15; max += span * 0.15;
+  const pad = { l: 4, r: 4, t: 6, b: 6 };
+  const X = (t) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "rgba(230,165,90,.35)");
+  grad.addColorStop(1, "rgba(230,165,90,0)");
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+  ctx.lineTo(X(pts[pts.length - 1][0]), h);
+  ctx.lineTo(X(pts[0][0]), h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+  ctx.strokeStyle = "#e6a55a";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.font = "10px Menlo, Consolas, monospace";
+  ctx.fillStyle = "#858e96";
+  ctx.fillText(`max ${Math.max(...vs).toFixed(3)}`, 8, 14);
+  ctx.fillText(`min ${Math.min(...vs).toFixed(3)}`, 8, h - 8);
+  const spanSec = Math.round((t1 - t0) / 1000);
+  const spanLabel = spanSec >= 60 ? `${Math.round(spanSec / 60)} min` : `${spanSec} s`;
+  ctx.textAlign = "right";
+  ctx.fillText(spanLabel, w - 8, h - 8);
+  ctx.textAlign = "left";
+}
+
+function renderEquipment() {
+  document.querySelectorAll("#equip-list [data-unit]").forEach((row) => {
+    const u = units[row.dataset.unit];
+    if (!u) return;
+    row.dataset.running = u.running ? "1" : "0";
+    const state = row.querySelector("[data-state]");
+    state.textContent = u.state.toUpperCase();
+    state.className = `eq-state ${u.state}`;
+    const btn = row.querySelector("[data-btn]");
+    btn.textContent = u.running ? "Stop" : "Start";
+  });
+}
+
+function renderAnomaly(a) {
+  const active = a.state !== "idle";
+  const ovenRunning = units.Oven?.state === "running";
+  const btn = $("inject");
+  btn.disabled = active || !ovenRunning;
+  btn.textContent = active ? `Anomaly in progress · ${Math.max(0, Math.ceil(a.duration - a.elapsed))} s` : !ovenRunning ? "⚡ Oven is stopped" : "⚡ Generate energy anomaly";
+  document.querySelectorAll("#phases span").forEach((el) => el.classList.toggle("on", el.dataset.state === a.state));
+  $("sim-progress").style.width = active ? `${Math.min(100, (a.elapsed / a.duration) * 100)}%` : "0";
+  const labels = { idle: "Waiting for trigger", ramp_up: "Ramping up", hold: "Holding at full severity", ramp_down: "Ramping down", recovery: "Lagging effects settling" };
+  $("sim-status").textContent = `${labels[a.state]}${active ? ` · severity ${Math.round(a.severity * 100)}%` : ""}`;
+  $("sim-count").textContent = `${a.count} injected`;
+
+  if (lastAnomalyState !== null && a.state !== lastAnomalyState) {
+    if (lastAnomalyState === "idle") logEvent("sim", "SIM    Energy anomaly injected");
+    else if (a.state === "idle") logEvent("sim", "SIM    Energy anomaly finished — ready");
+  }
+  lastAnomalyState = a.state;
+}
+
+function drawTrend(k) {
+  const canvas = $("trend");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const hist = k.history;
+  if (hist.length < 2) return;
+  const pad = { l: 46, r: 8, t: 8, b: 18 };
+  const threshold = k.baseline ? k.baseline * SEC_LIMIT : null;
+  const ys = hist.flatMap((p) => [p[1], p[2]]).concat(k.baseline ? [k.baseline, threshold] : []);
+  let min = Math.min(...ys), max = Math.max(...ys);
+  const span = (max - min) || 0.001;
+  min -= span * 0.1; max += span * 0.1;
+  const t1 = hist[hist.length - 1][0], t0 = Math.max(hist[0][0], t1 - 300_000);
+  const X = (t) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+
+  ctx.font = "10px Menlo, Consolas, monospace";
+  ctx.fillStyle = "#858e96";
+  ctx.strokeStyle = "#ffffff12";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = min + ((max - min) * i) / 4;
+    const y = Y(v);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.fillText(v.toFixed(4), 2, y + 3);
+  }
+  ctx.fillText("-5 min", pad.l, h - 4);
+  ctx.fillText("now", w - pad.r - 20, h - 4);
+
+  const hline = (v, color) => {
+    ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(v)); ctx.lineTo(w - pad.r, Y(v)); ctx.stroke(); ctx.restore();
+  };
+  if (k.baseline) { hline(k.baseline, "#858e96"); hline(threshold, "#f0b429"); }
+
+  const line = (idx, color, width) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+    hist.forEach((p, i) => { if (p[0] < t0) return; i ? ctx.lineTo(X(p[0]), Y(p[idx])) : ctx.moveTo(X(p[0]), Y(p[idx])); });
+    ctx.stroke();
+  };
+  line(1, "#5d666e", 1);
+  line(2, "#7cc4e8", 2);
+}
+
+// Animate fans and belt based on the latest values.
+let lastFrame = performance.now(), beltOffset = 0;
+function animate(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (latest) {
+    for (const fan of FANS) {
+      const speed = latest.values[fan[0]]?.value ?? 0;
+      fan[4] = (fan[4] + speed * 8 * dt) % 360;
+      fan[3].setAttribute("transform", `rotate(${fan[4]})`);
+    }
+    const belt = latest.values["Oven/BeltDriveModule/BeltSpeed"]?.value ?? 0;
+    beltOffset -= belt * 12 * dt;
+    $("product").setAttribute("stroke-dashoffset", beltOffset.toFixed(1));
+  }
+  requestAnimationFrame(animate);
+}
+
+async function poll() {
+  try {
+    const res = await fetch("api/state", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    latest = await res.json();
+    render(latest);
+    $("led-hmi").className = "led ok";
+    $("hmi-text").textContent = "HMI link";
+    document.body.classList.remove("stale");
+  } catch {
+    $("led-hmi").className = "led bad";
+    $("hmi-text").textContent = "HMI link lost";
+    document.body.classList.add("stale");
+  } finally {
+    setTimeout(poll, 1000);
+  }
+}
+
+
+// Training pane. Each item has a title, an intro and a tree. Selecting a tree node highlights `sel` on this page.
+// Oven mimic tags are addressed as [data-tag="<path>"], meter cards as [data-meter="<path>"]; `topic` is relative to the line topic.
+const tag = (p) => `[data-tag="${p}"]`;
+const tagsUnder = (p) => `[data-tag^="${p}/"]`;
+const zone = (z) => ({ sel: `#zone-${z}, ${tagsUnder(`Oven/${z}`)}`, topic: `Oven/${z}` });
+const zoneLeaves = (z) => [
+  { label: "Temperature: Top (°C/F), Bottom (°C/F)", sel: `${tag(`Oven/${z}/TemperatureTop`)}, ${tag(`Oven/${z}/TemperatureBottom`)}`, topic: [`Oven/${z}/TemperatureTop`, `Oven/${z}/TemperatureBottom`] },
+  { label: "Gas burner: Valve position (%)", sel: tag(`Oven/${z}/GasBurnerValvePosition`), topic: `Oven/${z}/GasBurnerValvePosition` },
+  { label: "Gas burner: Mass flow (Nm³/h)", sel: tag(`Oven/${z}/GasBurnerMassFlow`), topic: `Oven/${z}/GasBurnerMassFlow` },
+  { label: "Circulation Fan Speed (%)", sel: tag(`Oven/${z}/CirculationFanSpeed`), topic: `Oven/${z}/CirculationFanSpeed` },
+];
+const meter = (m) => ({ sel: `[data-meter="Oven/OvenUtilityMetering/${m}"]`, topic: `Oven/OvenUtilityMetering/${m}` });
+const ghost = { label: "…", ghost: true };
+
+const ISA95_TREE = {
+  label: "Waffle Line 01", sel: "#panel-overview", topic: "",
+  children: [
+    { label: "Ingredient-Handling", sel: "#area-IngredientHandling", topic: "IngredientHandling" },
+    { label: "Batter-Mixing", sel: "#area-BatterMixing", topic: "BatterMixing" },
+    { label: "Proofing (yeasted waffles)", sel: "#area-Proofing", topic: "Proofing" },
+    {
+      label: "Baking-Tunnel-Oven", sel: "#area-Oven, #panel-oven", topic: "Oven",
+      children: [
+        { label: "Heating Zone 01", ...zone("HeatingZone01"), children: zoneLeaves("HeatingZone01") },
+        { label: "Heating Zone 02", ...zone("HeatingZone02"), children: [ghost] },
+        { label: "Belt-Drive-Module", sel: tagsUnder("Oven/BeltDriveModule"), topic: "Oven/BeltDriveModule", children: [ghost] },
+        { label: "Air-Circulation", sel: `#unit-air, ${tagsUnder("Oven/AirCirculation")}`, topic: "Oven/AirCirculation", children: [ghost] },
+        { label: "Humidity-Control", sel: tagsUnder("Oven/HumidityControl"), topic: "Oven/HumidityControl", children: [ghost] },
+        {
+          label: "Oven Utility Metering", sel: '#panel-meters > h2, [data-meter^="Oven/OvenUtilityMetering/"]', topic: "Oven/OvenUtilityMetering",
+          children: [
+            { label: "Electricity: Total oven (kW)", ...meter("ElectricityTotalOven") },
+            { label: "Electricity: Incoming mains current (A)", ...meter("ElectricityIncomingMainsCurrent") },
+            { label: "Gas: Total oven (Nm³/h)", ...meter("GasTotalOven") },
+          ],
+        },
+      ],
+    },
+    { label: "Cooling", sel: "#area-Cooling", topic: "Cooling" },
+    { label: "Packaging", sel: "#area-Packaging", topic: "Packaging" },
+  ],
+};
+
+const ITEMS = [
+  {
+    title: "Show the SHT ISA95 structure",
+    intro: "The equipment hierarchy of Waffle Line 01 and its work units. Click a unit to highlight where it appears on the SCADA; click it again to clear.",
+    tree: ISA95_TREE,
+  },
+];
+
+const LINE_TOPIC = "…/WaffleLine01";
+const learn = { open: false, item: null, node: null };
+const treeNodes = [];
+
+function treeHtml(n) {
+  const id = treeNodes.push(n) - 1;
+  const head = n.ghost ? `<span class="node ghost">${n.label}</span>` : `<button class="node" data-node="${id}">${n.label}</button>`;
+  return `<li>${head}${n.children ? `<ul>${n.children.map(treeHtml).join("")}</ul>` : ""}</li>`;
+}
+
+function buildItems() {
+  $("lessons").innerHTML = ITEMS.map((it, i) => `
+    <div class="lesson" data-i="${i}">
+      <button class="lesson-head" aria-expanded="false"><span class="n">${i + 1}</span>${it.title}<span class="chev"></span></button>
+      <div class="lesson-body" hidden>
+        <p>${it.intro}</p>
+        <ul class="tree">${treeHtml(it.tree)}</ul>
+        <div class="topic-line"></div>
+      </div>
+    </div>`).join("");
+}
+
+function clearHighlights() {
+  document.querySelectorAll(".hl").forEach((el) => el.classList.remove("hl"));
+}
+
+function applyHighlights(scroll) {
+  clearHighlights();
+  const n = learn.node != null && treeNodes[learn.node];
+  if (!learn.open || !n) return;
+  const els = [...document.querySelectorAll(n.sel)];
+  els.forEach((el) => el.classList.add("hl"));
+  const r = els[0]?.getBoundingClientRect();
+  if (scroll && r && (r.top < 0 || r.bottom > innerHeight)) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    els[0].scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  }
+}
+
+function showSelection() {
+  document.querySelectorAll(".node[data-node]").forEach((b) => b.classList.toggle("sel", Number(b.dataset.node) === learn.node));
+  const n = learn.node != null && treeNodes[learn.node];
+  const topics = n ? [].concat(n.topic).map((t) => `<code>${LINE_TOPIC}${t ? "/" + t : ""}</code>`).join("") : "";
+  document.querySelectorAll(".topic-line").forEach((el) => {
+    el.innerHTML = n ? `Topic${topics.includes("</code><code>") ? "s" : ""}${topics}` : "Nothing selected";
+  });
+}
+
+function selectNode(id) {
+  learn.node = learn.node === id ? null : id;
+  showSelection();
+  applyHighlights(true);
+}
+
+function selectItem(i) {
+  learn.item = learn.item === i ? null : i;
+  learn.node = null;
+  document.querySelectorAll(".lesson").forEach((el) => {
+    const on = Number(el.dataset.i) === learn.item;
+    el.classList.toggle("open", on);
+    el.querySelector(".lesson-head").setAttribute("aria-expanded", on);
+    el.querySelector(".lesson-body").hidden = !on;
+  });
+  showSelection();
+  applyHighlights();
+}
+
+function setLearnOpen(open) {
+  learn.open = open;
+  document.body.classList.toggle("learn-open", open);
+  const btn = $("learn-toggle");
+  btn.setAttribute("aria-expanded", open);
+  btn.title = open ? "Collapse training pane" : "Expand training pane";
+  try { localStorage.setItem("learnOpen", open ? "1" : "0"); } catch {}
+  applyHighlights();
+}
+
+function initLearn() {
+  buildItems();
+  $("lessons").addEventListener("click", (e) => {
+    const node = e.target.closest("button[data-node]");
+    if (node) return selectNode(Number(node.dataset.node));
+    const head = e.target.closest(".lesson-head");
+    if (head) selectItem(Number(head.parentElement.dataset.i));
+  });
+  $("learn-toggle").addEventListener("click", () => setLearnOpen(!learn.open));
+  let saved = null;
+  try { saved = localStorage.getItem("learnOpen"); } catch {}
+  setLearnOpen(saved != null ? saved === "1" : innerWidth >= 1200);
+  selectItem(0);
+}
+
+$("inject").addEventListener("click", async () => {
+  const btn = $("inject");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/anomaly", { method: "POST" });
+    const body = await res.json();
+    if (res.status === 409) logEvent("sim", `SIM    ${body.error || "Anomaly already in progress"}`);
+    renderAnomaly(body.anomaly);
+  } catch {
+    btn.disabled = false;
+    logEvent("alarm", "SIM    Could not reach simulator");
+  }
+});
+
+$("equip-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-btn]");
+  if (!btn) return;
+  const row = btn.closest("[data-unit]");
+  const id = row.dataset.unit;
+  const running = row.dataset.running === "1";
+  const title = row.querySelector(".eq-name").textContent;
+  btn.disabled = true;
+  try {
+    await fetch(`api/units/${id}/${running ? "stop" : "start"}`, { method: "POST" });
+    logEvent("sim", `SIM    ${title} ${running ? "stopping" : "starting"}`);
+  } catch {
+    logEvent("alarm", "SIM    Could not reach simulator");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString([], { hour12: false }); }, 1000);
+build();
+initLearn();
+poll();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production · Waffle Line 01</title>
+<style>
+  /*
+   * A shop-floor Andon/dispatch board, not another desktop app: dark background, big
+   * colour-coded tiles, touch-sized buttons. Deliberately non-integrated — every field
+   * here is something an operator typed in, nothing is read back from the live process.
+   */
+  :root {
+    --bg: #0b0e14;
+    --panel: #161b24;
+    --panel-head: #1d2330;
+    --border: #262d3d;
+    --text: #e6e9ef;
+    --muted: #8b93a7;
+    --faint: #565f74;
+    --scheduled: #8b93a7;
+    --scheduled-bg: #20242f;
+    --inprogress: #3b82f6;
+    --inprogress-bg: #182338;
+    --completed: #22c55e;
+    --completed-bg: #16241c;
+    --warn: #eab308;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); }
+  body { padding: 0 16px 24px; min-height: 100vh; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+    margin: 0 -16px 16px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 800; }
+  header .sub { color: var(--muted); font-size: 11px; }
+  .spacer { flex: 1; }
+  .nav { display: flex; gap: 2px; font: 12px var(--sans); }
+  .nav a, .nav span { padding: 4px 9px; text-decoration: none; color: var(--muted); border: 1px solid transparent; border-radius: 5px; }
+  .nav a:hover { color: var(--text); background: var(--bg); }
+  .nav span.here { color: var(--text); font-weight: 700; border-color: var(--border); background: var(--bg); }
+
+  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  @media (max-width: 980px) { .board { grid-template-columns: minmax(0, 1fr); } }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 4px 2px 10px; }
+  .col-head .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .col[data-status="scheduled"] .col-head .dot { background: var(--scheduled); }
+  .col[data-status="in_progress"] .col-head .dot { background: var(--inprogress); }
+  .col[data-status="completed"] .col-head .dot { background: var(--completed); }
+  .col-head h2 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .col-head .n { margin-left: auto; font: 11px var(--mono); color: var(--muted); }
+  .tiles { display: grid; gap: 12px; min-height: 40px; }
+
+  .tile { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--faint); border-radius: 8px; padding: 12px 14px; }
+  .tile.scheduled { border-left-color: var(--scheduled); }
+  .tile.in_progress { border-left-color: var(--inprogress); background: linear-gradient(180deg, var(--inprogress-bg), var(--panel) 60%); }
+  .tile.completed { border-left-color: var(--completed); background: linear-gradient(180deg, var(--completed-bg), var(--panel) 60%); }
+
+  .t-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .t-id { font: 800 14px var(--mono); }
+  .t-recipe { color: var(--muted); font-size: 12px; }
+  .t-due { margin-top: 3px; font: 11px var(--mono); color: var(--faint); }
+
+  .start-btn {
+    margin-top: 12px; width: 100%; padding: 12px; border: 1px solid var(--scheduled); border-radius: 6px;
+    background: #2a3040; color: var(--text); font: 700 12px var(--sans); letter-spacing: .03em; cursor: pointer;
+  }
+  .start-btn:hover { background: #333a4d; }
+
+  .steps-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; margin-top: 12px; }
+  .step-chip {
+    padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--muted);
+    font: 700 10px var(--sans); letter-spacing: .02em; text-align: center; cursor: pointer; line-height: 1.3;
+  }
+  .step-chip .n { display: block; font: 800 11px var(--mono); color: var(--faint); margin-bottom: 2px; }
+  .step-chip.done { border-color: var(--completed); background: var(--completed-bg); color: var(--completed); }
+  .step-chip.done .n { color: var(--completed); }
+  .step-chip.done .n::before { content: "\2713 "; }
+
+  .report-btn {
+    margin-top: 12px; width: 100%; padding: 10px; border: 1px solid var(--inprogress); border-radius: 6px;
+    background: var(--inprogress); color: #fff; font: 700 12px var(--sans); letter-spacing: .03em; cursor: pointer;
+  }
+  .report-btn:hover { background: #2f6fd8; }
+
+  .report-form { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); display: grid; gap: 10px; }
+  .report-form[hidden] { display: none; }
+  .mat-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .mat-table th { text-align: left; font: 700 9px var(--sans); text-transform: uppercase; letter-spacing: .03em; color: var(--faint); padding: 0 6px 4px; }
+  .mat-table td { padding: 3px 6px; border-top: 1px solid var(--border); }
+  .mat-table input {
+    width: 84px; font: 12px var(--mono); padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); color: var(--text);
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: grid; gap: 3px; }
+  .field label { font: 700 10px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  .field .hint { font-weight: 400; color: var(--faint); text-transform: none; }
+  .field input, .field textarea {
+    font: 13px var(--sans); padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text);
+  }
+  .field textarea { resize: vertical; min-height: 44px; }
+  .form-actions { display: flex; gap: 8px; }
+  .form-actions button { font: 700 11px var(--sans); padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  .form-actions [data-submit] { border: 1px solid var(--completed); background: var(--completed); color: #04130b; }
+  .form-actions [data-submit]:disabled { opacity: .6; cursor: not-allowed; }
+  .form-actions [data-cancel] { border: 1px solid var(--border); background: transparent; color: var(--muted); }
+  .form-hint { font-size: 11px; color: #f87171; min-height: 14px; }
+
+  .yield-summary { margin-top: 10px; font: 800 20px var(--mono); }
+  .yield-summary .pct { font-size: 13px; font-weight: 700; margin-left: 8px; }
+  .yield-summary .pct.ok { color: var(--completed); }
+  .yield-summary .pct.warn { color: var(--warn); }
+  .yield-sub { font: 11px var(--mono); color: var(--muted); margin-top: 2px; }
+  .t-note { margin-top: 8px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font-size: 11px; }
+  details.mat-detail { margin-top: 10px; }
+  details.mat-detail summary { cursor: pointer; font: 700 10px var(--sans); text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+
+  .empty-col { padding: 14px; color: var(--faint); font-size: 11px; border: 1px dashed var(--border); border-radius: 8px; text-align: center; }
+  body.stale .board { opacity: .55; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Production</h1>
+    <div class="sub">Waffle Line 01 &middot; Manufacturing Execution (non-integrated)</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav"><a href="/">&#8962; All systems</a></div>
+</header>
+
+<div class="board" id="board">
+  <div class="col" data-status="scheduled">
+    <div class="col-head"><span class="dot"></span><h2>Scheduled</h2><span class="n" data-count></span></div>
+    <div class="tiles" data-tiles></div>
+  </div>
+  <div class="col" data-status="in_progress">
+    <div class="col-head"><span class="dot"></span><h2>In Progress</h2><span class="n" data-count></span></div>
+    <div class="tiles" data-tiles></div>
+  </div>
+  <div class="col" data-status="completed">
+    <div class="col-head"><span class="dot"></span><h2>Completed</h2><span class="n" data-count></span></div>
+    <div class="tiles" data-tiles></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let RECIPES = {};
+let STEPS = [];
+const tileEls = {}; // order id -> { el, status }
+
+function fmtQty(v, unit) { return v == null ? "—" : `${v} ${unit}`; }
+function fmtDate(t) { return t == null ? "—" : new Date(t * 1000).toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+function fmtDue(t) {
+  const mins = Math.round((t - Date.now() / 1000) / 60);
+  if (mins < 0) return `Due ${fmtDate(t)} — overdue`;
+  if (mins < 90) return `Due in ${mins} min`;
+  return `Due ${fmtDate(t)}`;
+}
+
+function buildReportForm(order) {
+  const recipe = RECIPES[order.recipe];
+  const form = document.createElement("form");
+  form.className = "report-form";
+  form.hidden = true;
+  const expected = recipe.packs_per_batch * order.batches;
+  form.innerHTML = `
+    <table class="mat-table">
+      <thead><tr><th>Material</th><th>Standard</th><th>Actual</th></tr></thead>
+      <tbody>${order.materials.map((m) => `
+        <tr>
+          <td>${m.material}</td>
+          <td>${fmtQty(m.standard, m.unit)}</td>
+          <td><input type="number" step="any" min="0" data-material="${m.material}" value="${m.actual != null ? m.actual : m.standard}"> ${m.unit}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    <div class="row2">
+      <div class="field"><label>Good Yield <span class="hint">(packs, expected ~${expected})</span></label><input type="number" step="1" min="0" data-yield-good placeholder="packs"></div>
+      <div class="field"><label>Scrap / Reject <span class="hint">(packs)</span></label><input type="number" step="1" min="0" data-yield-scrap placeholder="0" value="0"></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea data-note placeholder="Optional observations"></textarea></div>
+    <div class="form-hint"></div>
+    <div class="form-actions">
+      <button type="submit" data-submit>Submit report</button>
+      <button type="button" data-cancel>Cancel</button>
+    </div>`;
+  form.querySelector("[data-cancel]").addEventListener("click", () => {
+    form.hidden = true;
+    form.previousElementSibling.hidden = false; // the report button
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const goodEl = form.querySelector("[data-yield-good]");
+    if (!goodEl.value) { form.querySelector(".form-hint").textContent = "Enter the good yield before submitting."; return; }
+    const actuals = {};
+    form.querySelectorAll("[data-material]").forEach((el) => { actuals[el.dataset.material] = el.value; });
+    const btn = form.querySelector("[data-submit]");
+    btn.disabled = true;
+    try {
+      const res = await fetch(`api/mes/orders/${order.id}/complete`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actuals, yield_good: goodEl.value, yield_scrap: form.querySelector("[data-yield-scrap]").value, note: form.querySelector("[data-note]").value }),
+      });
+      if (!res.ok) { form.querySelector(".form-hint").textContent = "Could not submit — try again."; btn.disabled = false; return; }
+      const updated = (await res.json()).order;
+      placeTile(updated, true);
+    } catch {
+      form.querySelector(".form-hint").textContent = "Could not reach the server.";
+      btn.disabled = false;
+    }
+  });
+  return form;
+}
+
+function renderScheduled(el, order) {
+  const recipe = RECIPES[order.recipe];
+  el.innerHTML = `
+    <div class="t-head"><span class="t-id">${order.id}</span><span class="t-recipe">${recipe.name} · ${order.batches} batch${order.batches === 1 ? "" : "es"}</span></div>
+    <div class="t-due">${fmtDue(order.due_at)}</div>
+    <button class="start-btn" data-start>&#9658; Start Order</button>`;
+  el.querySelector("[data-start]").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`api/mes/orders/${order.id}/start`, { method: "POST" });
+      if (res.ok) placeTile((await res.json()).order, true);
+      else btn.disabled = false;
+    } catch { btn.disabled = false; }
+  });
+}
+
+function renderInProgress(el, order) {
+  const recipe = RECIPES[order.recipe];
+  el.innerHTML = `
+    <div class="t-head"><span class="t-id">${order.id}</span><span class="t-recipe">${recipe.name} · ${order.batches} batch${order.batches === 1 ? "" : "es"}</span></div>
+    <div class="t-due">Started ${fmtDate(order.started_at)}</div>
+    <div class="steps-row" data-steps>${STEPS.map((s, i) => `<div class="step-chip" data-step="${s.id}"><span class="n">${i + 1}</span>${s.label}</div>`).join("")}</div>
+    <button class="report-btn" data-report>Complete &amp; Report ▸</button>`;
+  el.querySelectorAll("[data-step]").forEach((chip) => chip.addEventListener("click", async () => {
+    const stepId = chip.dataset.step;
+    const done = !chip.classList.contains("done");
+    chip.classList.toggle("done", done); // optimistic
+    try {
+      const res = await fetch(`api/mes/orders/${order.id}/steps/${stepId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }),
+      });
+      if (res.ok) Object.assign(order, (await res.json()).order);
+      else chip.classList.toggle("done", !done); // revert
+    } catch { chip.classList.toggle("done", !done); }
+  }));
+  syncSteps(el, order);
+  const reportBtn = el.querySelector("[data-report]");
+  const form = buildReportForm(order);
+  reportBtn.addEventListener("click", () => { reportBtn.hidden = true; form.hidden = false; });
+  el.appendChild(form);
+}
+
+function renderCompleted(el, order) {
+  const recipe = RECIPES[order.recipe];
+  const expected = recipe.packs_per_batch * order.batches;
+  const pct = order.yield_good != null ? (order.yield_good / expected) * 100 : null;
+  el.innerHTML = `
+    <div class="t-head"><span class="t-id">${order.id}</span><span class="t-recipe">${recipe.name} · ${order.batches} batch${order.batches === 1 ? "" : "es"}</span></div>
+    <div class="t-due">Completed ${fmtDate(order.completed_at)}</div>
+    <div class="yield-summary">${order.yield_good ?? "—"} good${pct != null ? `<span class="pct ${pct >= 95 ? "ok" : "warn"}">${pct.toFixed(1)}%</span>` : ""}</div>
+    <div class="yield-sub">Expected ~${expected} · Scrap ${order.yield_scrap ?? 0}</div>
+    ${order.note ? `<div class="t-note">${order.note.replace(/</g, "&lt;")}</div>` : ""}
+    <details class="mat-detail">
+      <summary>Material usage</summary>
+      <table class="mat-table">
+        <thead><tr><th>Material</th><th>Standard</th><th>Actual</th></tr></thead>
+        <tbody>${order.materials.map((m) => `<tr><td>${m.material}</td><td>${fmtQty(m.standard, m.unit)}</td><td>${fmtQty(m.actual, m.unit)}</td></tr>`).join("")}</tbody>
+      </table>
+    </details>`;
+}
+
+function syncSteps(el, order) {
+  const row = el.querySelector("[data-steps]");
+  if (!row) return;
+  STEPS.forEach((s) => {
+    const chip = row.querySelector(`[data-step="${s.id}"]`);
+    if (chip) chip.classList.toggle("done", order.steps[s.id].done);
+  });
+}
+
+function placeTile(order, forceRebuild) {
+  let entry = tileEls[order.id];
+  if (!entry) {
+    const el = document.createElement("div");
+    el.dataset.id = order.id;
+    entry = { el, status: null };
+    tileEls[order.id] = entry;
+  }
+  entry.el.className = `tile ${order.status}`;
+  const col = document.querySelector(`.col[data-status="${order.status}"] [data-tiles]`);
+  if (entry.el.parentElement !== col) col.appendChild(entry.el);
+  if (forceRebuild || entry.status !== order.status) {
+    ({ scheduled: renderScheduled, in_progress: renderInProgress, completed: renderCompleted })[order.status](entry.el, order);
+    entry.status = order.status;
+  } else if (order.status === "in_progress") {
+    syncSteps(entry.el, order);
+  }
+}
+
+function updateCounts() {
+  document.querySelectorAll(".col").forEach((col) => {
+    col.querySelector("[data-count]").textContent = col.querySelectorAll(".tile").length;
+  });
+  document.querySelectorAll("[data-tiles]").forEach((tiles) => {
+    let empty = tiles.parentElement.querySelector(".empty-col");
+    if (tiles.children.length === 0) {
+      if (!empty) { empty = document.createElement("div"); empty.className = "empty-col"; empty.textContent = "Nothing here"; tiles.after(empty); }
+    } else if (empty) {
+      empty.remove();
+    }
+  });
+}
+
+function render(payload) {
+  RECIPES = payload.recipes;
+  STEPS = payload.steps;
+  const liveIds = new Set(payload.orders.map((o) => o.id));
+  for (const id of Object.keys(tileEls)) {
+    if (!liveIds.has(id)) { tileEls[id].el.remove(); delete tileEls[id]; }
+  }
+  for (const order of payload.orders) placeTile(order, false);
+  updateCounts();
+}
+
+async function poll() {
+  try {
+    const res = await fetch("api/mes", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+    document.body.classList.remove("stale");
+  } catch {
+    document.body.classList.add("stale");
+  } finally {
+    setTimeout(poll, 4000);
+  }
+}
+
+poll();
+</script>
+</body>
+</html>

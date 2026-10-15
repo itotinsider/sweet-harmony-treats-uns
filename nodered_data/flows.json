@@ -1,0 +1,381 @@
+[
+    {
+        "id": "tab-erp-uns",
+        "type": "tab",
+        "label": "Maintenance \u2192 Unified Namespace",
+        "disabled": false,
+        "info": "Reads the (simulated) ERP's maintenance CSV export and republishes each functional location's most recent work order into the plant's MQTT namespace, under a \"maintenance\" domain keyed by functional location.\n\nThe CSV lives at /data/exports/workorders.csv (mounted read-only from the same host folder the simulator writes to). It only ever grows \u2014 one row is appended the moment a work order is created in the Maintenance HMI (http://localhost:8090/maint), never on later status changes.\n\nEach functional location gets ONE retained topic, .../LatestWorkOrder, holding whichever order was created there most recently \u2014 not one topic per order. Creating a second order at the same location overwrites the first's topic.\n\nFlow: poll \u2192 read whole file \u2192 parse rows \u2192 keep only the latest order per functional location, and only if it's changed since last publish \u2192 build the namespace topic + payload \u2192 publish."
+    },
+    {
+        "id": "cfg-broker",
+        "type": "mqtt-broker",
+        "name": "Waffle Line broker (Mosquitto)",
+        "broker": "mosquitto",
+        "port": "1883",
+        "clientid": "waffle-line-nodered",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "closeTopic": "",
+        "willTopic": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "n-comment-1",
+        "type": "comment",
+        "z": "tab-erp-uns",
+        "name": "1. Poll the ERP export and read the whole CSV",
+        "info": "",
+        "x": 220,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "n-inject",
+        "type": "inject",
+        "z": "tab-erp-uns",
+        "name": "Every 10s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 160,
+        "wires": [
+            [
+                "n-filein"
+            ]
+        ]
+    },
+    {
+        "id": "n-filein",
+        "type": "file in",
+        "z": "tab-erp-uns",
+        "name": "Read workorders.csv",
+        "filename": "/data/exports/workorders.csv",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 350,
+        "y": 160,
+        "wires": [
+            [
+                "n-csv"
+            ]
+        ]
+    },
+    {
+        "id": "n-comment-2",
+        "type": "comment",
+        "z": "tab-erp-uns",
+        "name": "2. Keep the latest order per functional location, then \"grep\" out ones already published",
+        "info": "",
+        "x": 340,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "n-csv",
+        "type": "csv",
+        "z": "tab-erp-uns",
+        "name": "Parse CSV rows",
+        "sep": ",",
+        "hdrin": true,
+        "hdrout": "none",
+        "multi": "mult",
+        "ret": "\\n",
+        "temp": "",
+        "skip": "0",
+        "strings": true,
+        "include_empty_strings": false,
+        "include_null_values": false,
+        "x": 570,
+        "y": 280,
+        "wires": [
+            [
+                "n-dedup"
+            ]
+        ]
+    },
+    {
+        "id": "n-dedup",
+        "type": "function",
+        "z": "tab-erp-uns",
+        "name": "Keep only the latest order per location",
+        "func": "// csv (multi=\"mult\") delivers one message whose payload is the array of ALL rows\n// currently in the file, not one message per row \u2014 so both the fan-out into individual\n// records and the \"grep\" happen right here.\n//\n// The namespace holds one LatestWorkOrder per functional location, not one topic per\n// order, so: group by functional_location keeping the last (most recently created) row,\n// then only pass it on if that location's latest order id has actually changed since the\n// last time this flow published for it.\nconst rows = Array.isArray(msg.payload) ? msg.payload : [msg.payload];\nconst latestByLocation = {};\nfor (const row of rows) {\n    if (!row || !row.functional_location || !row.order_id) continue;\n    latestByLocation[row.functional_location] = row; // later rows overwrite earlier ones\n}\n\nconst lastPublished = flow.get(\"lastOrderIdByLocation\") || {};\nconst fresh = [];\nfor (const [location, row] of Object.entries(latestByLocation)) {\n    if (lastPublished[location] === row.order_id) continue;\n    lastPublished[location] = row.order_id;\n    fresh.push({ payload: row });\n}\nflow.set(\"lastOrderIdByLocation\", lastPublished);\nreturn [fresh];",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 280,
+        "wires": [
+            [
+                "n-buildtopic"
+            ]
+        ]
+    },
+    {
+        "id": "n-comment-3",
+        "type": "comment",
+        "z": "tab-erp-uns",
+        "name": "3. Build the namespace topic: .../Maintenance/WaffleLine01/<FunctionalLocation>/LatestWorkOrder",
+        "info": "",
+        "x": 400,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "n-buildtopic",
+        "type": "function",
+        "z": "tab-erp-uns",
+        "name": "Build UNS topic + payload",
+        "func": "// Functional-location code -> namespace path segment, mirroring the topic tree the\n// simulator already publishes live process data under (see CLAUDE.md \"Topic naming\").\n// Source of truth for the codes themselves: WORK_ORDER_META in simulator.py.\nconst FL_PATH = {\n    \"WL01-ING\": \"IngredientHandling\",\n    \"WL01-MIX\": \"BatterMixing\",\n    \"WL01-PRF\": \"Proofing\",\n    \"WL01-OVN-Z1\": \"Oven/HeatingZone01\",\n    \"WL01-OVN-Z2\": \"Oven/HeatingZone02\",\n    \"WL01-OVN-AIR\": \"Oven/AirCirculation\",\n    \"WL01-OVN-HUM\": \"Oven/HumidityControl\",\n    \"WL01-OVN-BDM\": \"Oven/BeltDriveModule\",\n    \"WL01-OVN-UTL\": \"Oven/OvenUtilityMetering\",\n    \"WL01-COOL\": \"Cooling\",\n    \"WL01-PACK\": \"Packaging\",\n};\n\nconst LINE_PREFIX = \"v1.0/SHT/Munich/Maintenance/WaffleLine01\";\nconst row = msg.payload;\nconst flPath = FL_PATH[row.functional_location] || row.functional_location || \"Unknown\";\n\nmsg.topic = `${LINE_PREFIX}/${flPath}/LatestWorkOrder`;\nmsg.payload = JSON.stringify({\n    domain: \"maintenance\",\n    functionalLocation: row.functional_location,\n    orderId: row.order_id,\n    orderType: row.order_type,\n    priority: row.priority,\n    workCenter: row.work_center,\n    shortText: row.short_text,\n    breakdown: row.breakdown === true || row.breakdown === \"True\" || row.breakdown === \"true\",\n    reportedBy: row.reported_by,\n    status: row.status,\n    createdAt: row.created_at,\n    timestamp: new Date().toISOString(),\n});\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1080,
+        "y": 280,
+        "wires": [
+            [
+                "n-mqttout",
+                "n-debug"
+            ]
+        ]
+    },
+    {
+        "id": "n-mqttout",
+        "type": "mqtt out",
+        "z": "tab-erp-uns",
+        "name": "Publish to Waffle Line broker",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "cfg-broker",
+        "x": 1330,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "n-debug",
+        "type": "debug",
+        "z": "tab-erp-uns",
+        "name": "Published UNS messages",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1320,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "tab-quality-uns",
+        "type": "tab",
+        "label": "Quality \u2192 Unified Namespace",
+        "disabled": false,
+        "info": "Reads the (simulated) LIMS's lab-sample CSV export and republishes each newly-registered Proofing result into the plant's MQTT namespace, under a \"quality\" domain.\n\nThe CSV lives at /data/exports/lab_samples.csv (mounted read-only from the same host folder the simulator writes to). It only ever grows \u2014 one row is appended the moment a technician registers a result in the Lab HMI (http://localhost:8090/lab), for either stage (Proofing or Oven); this flow only handles Proofing so far.\n\nEach result publishes three retained topics under .../Quality/WaffleLine01/Proofing/: two individual current-value tags (DoughCoreTemperature, DoughPh) and one LatestSample tag carrying the whole record as JSON. A later Oven-stage branch would follow the same shape.\n\nFlow: poll \u2192 read whole file \u2192 parse rows \u2192 keep only Proofing rows not seen before \u2192 fan out to the 3 topics + payloads \u2192 publish."
+    },
+    {
+        "id": "n-q-comment-1",
+        "type": "comment",
+        "z": "tab-quality-uns",
+        "name": "1. Poll the LIMS export and read the whole CSV",
+        "info": "",
+        "x": 220,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "n-q-inject",
+        "type": "inject",
+        "z": "tab-quality-uns",
+        "name": "Every 10s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 160,
+        "wires": [
+            [
+                "n-q-filein"
+            ]
+        ]
+    },
+    {
+        "id": "n-q-filein",
+        "type": "file in",
+        "z": "tab-quality-uns",
+        "name": "Read lab_samples.csv",
+        "filename": "/data/exports/lab_samples.csv",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 360,
+        "y": 160,
+        "wires": [
+            [
+                "n-q-csv"
+            ]
+        ]
+    },
+    {
+        "id": "n-q-comment-2",
+        "type": "comment",
+        "z": "tab-quality-uns",
+        "name": "2. Parse rows, keep only Proofing, then \"grep\" out ones already published",
+        "info": "",
+        "x": 330,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "n-q-csv",
+        "type": "csv",
+        "z": "tab-quality-uns",
+        "name": "Parse CSV rows",
+        "sep": ",",
+        "hdrin": true,
+        "hdrout": "none",
+        "multi": "mult",
+        "ret": "\\n",
+        "temp": "",
+        "skip": "0",
+        "strings": true,
+        "include_empty_strings": false,
+        "include_null_values": false,
+        "x": 570,
+        "y": 280,
+        "wires": [
+            [
+                "n-q-dedup"
+            ]
+        ]
+    },
+    {
+        "id": "n-q-dedup",
+        "type": "function",
+        "z": "tab-quality-uns",
+        "name": "Keep only new Proofing sample_ids",
+        "func": "// csv (multi=\"mult\") delivers one message whose payload is the array of ALL rows\n// currently in the file \u2014 the fan-out into individual records, the stage filter, and the\n// \"grep\" for ones not seen before all happen right here.\n//\n// This branch only handles Proofing so far; Oven-stage rows are left for a later branch.\nconst rows = Array.isArray(msg.payload) ? msg.payload : [msg.payload];\nconst seen = flow.get(\"seenProofingSampleIds\") || {};\nconst fresh = [];\n\nfor (const row of rows) {\n    const id = row && row.sample_id;\n    if (!id || row.stage !== \"Proofing\" || seen[id]) continue;\n    seen[id] = true;\n    fresh.push({ payload: row });\n}\nflow.set(\"seenProofingSampleIds\", seen);\nreturn [fresh];",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 280,
+        "wires": [
+            [
+                "n-q-buildtopics"
+            ]
+        ]
+    },
+    {
+        "id": "n-q-comment-3",
+        "type": "comment",
+        "z": "tab-quality-uns",
+        "name": "3. Fan out to 3 topics: two point values + the whole sample as LatestSample",
+        "info": "",
+        "x": 340,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "n-q-buildtopics",
+        "type": "function",
+        "z": "tab-quality-uns",
+        "name": "Build UNS topics + payloads",
+        "func": "const LINE_PREFIX = \"v1.0/SHT/Munich/Quality/WaffleLine01/Proofing\";\nconst row = msg.payload;\nconst ts = new Date().toISOString();\nconst num = (v) => (v === \"\" || v == null ? null : Number(v));\nconst bool = (v) => v === true || v === \"True\" || v === \"true\";\n\nconst tempMsg = {\n    topic: `${LINE_PREFIX}/DoughCoreTemperature`,\n    payload: JSON.stringify({ value: num(row.doughTemp), unit: \"\\u00b0C\", timestamp: ts }),\n};\nconst phMsg = {\n    topic: `${LINE_PREFIX}/DoughPh`,\n    payload: JSON.stringify({ value: num(row.doughPh), unit: \"pH\", timestamp: ts }),\n};\nconst latestMsg = {\n    topic: `${LINE_PREFIX}/LatestSample`,\n    payload: JSON.stringify({\n        domain: \"quality\",\n        stage: \"Proofing\",\n        sampleId: row.sample_id,\n        adhoc: bool(row.adhoc),\n        doughCoreTemperature: num(row.doughTemp),\n        doughPh: num(row.doughPh),\n        proofHeight: num(row.proofHeight),\n        visualCheck: row.visual_check,\n        result: row.result,\n        note: row.note,\n        technician: row.technician,\n        completedAt: row.completed_at,\n        timestamp: ts,\n    }),\n};\n\nreturn [[tempMsg, phMsg, latestMsg]];",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1070,
+        "y": 280,
+        "wires": [
+            [
+                "n-q-mqttout",
+                "n-q-debug"
+            ]
+        ]
+    },
+    {
+        "id": "n-q-mqttout",
+        "type": "mqtt out",
+        "z": "tab-quality-uns",
+        "name": "Publish to Waffle Line broker",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "cfg-broker",
+        "x": 1330,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "n-q-debug",
+        "type": "debug",
+        "z": "tab-quality-uns",
+        "name": "Published UNS messages",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1320,
+        "y": 320,
+        "wires": []
+    }
+]

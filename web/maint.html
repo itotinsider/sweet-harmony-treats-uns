@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant Maintenance · Waffle Line 01</title>
+<style>
+  /*
+   * Old-school SAP GUI / PM order-list flavour (think IW38): dense ALV-grid table, a
+   * selection-screen filter bar with an Execute button, red/yellow/green system-status
+   * traffic lights, small Arial. Not a SCADA screen — a maintenance planner/technician tool.
+   */
+  :root {
+    --bg: #eceef1;
+    --panel: #ffffff;
+    --head-blue: #0a3d67;
+    --head-blue-lt: #0f5c93;
+    --border: #b6c3d1;
+    --grid-line: #d6dee6;
+    --grid-head: #dce6f1;
+    --text: #1a1a1a;
+    --muted: #5b6675;
+    --link: #0b5fa5;
+    --sel: #cfe3fb;
+    --red: #c0392b;
+    --yellow: #b8860b;
+    --green: #1e7e34;
+    --red-bg: #fbe4e1;
+    --yellow-bg: #fbf1d6;
+    --green-bg: #e2f2e4;
+    --mono: Consolas, "SF Mono", monospace;
+    --sans: Arial, "Segoe UI", Tahoma, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 12px/1.4 var(--sans); }
+  body { padding-bottom: 24px; }
+
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 4px 12px; background: #d9dee4; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+  .topbar .spacer { flex: 1; }
+  .topbar .nav a { color: var(--link); text-decoration: none; margin-left: 10px; }
+  .topbar .nav a:hover { text-decoration: underline; }
+  .topbar .sysinfo { font: 11px var(--mono); color: var(--muted); }
+
+  .titlebar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: linear-gradient(180deg, var(--head-blue-lt), var(--head-blue)); color: #fff; }
+  .titlebar .tcode { font: 700 11px var(--mono); background: #06283f; padding: 2px 7px; border-radius: 3px; letter-spacing: .04em; }
+  .titlebar h1 { margin: 0; font-size: 15px; font-weight: 700; }
+  .titlebar .sub { font-size: 11px; color: #cfe0ee; }
+
+  .selection {
+    margin: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  }
+  .selection h2 { margin: 0; padding: 5px 10px; background: var(--grid-head); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .sel-body { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 10px; align-items: end; }
+  .sel-field { display: grid; gap: 2px; }
+  .sel-field label { font: 700 10px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .sel-field select, .sel-field input {
+    font: 12px var(--sans); padding: 4px 6px; border: 1px solid var(--border); border-radius: 2px; background: #fff; min-width: 140px;
+  }
+  .btn {
+    font: 700 11px var(--sans); padding: 6px 12px; border: 1px solid #6b7a89; border-radius: 3px; cursor: pointer;
+    background: linear-gradient(180deg, #f7f9fb, #e2e8ee); color: var(--text); text-decoration: none; display: inline-block;
+  }
+  .btn:hover { background: linear-gradient(180deg, #eef3f8, #d6dee6); }
+  .btn.primary { background: linear-gradient(180deg, #2f8f4e, #1e7e34); border-color: #14602a; color: #fff; }
+  .btn.primary:hover { background: linear-gradient(180deg, #35a058, #237a37); }
+  .btn.accent { background: linear-gradient(180deg, #1c7fc4, #0b5fa5); border-color: #084a80; color: #fff; }
+  .btn.accent:hover { background: linear-gradient(180deg, #2189cf, #0e6ab3); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin: 0 12px 8px; }
+  .toolbar .count { font-size: 11px; color: var(--muted); }
+  .toolbar .spacer { flex: 1; }
+
+  .grid-wrap { margin: 0 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.grid thead th {
+    background: var(--grid-head); border-bottom: 1px solid var(--border); border-right: 1px solid var(--grid-line);
+    padding: 5px 8px; text-align: left; font: 700 10px var(--sans); letter-spacing: .02em; text-transform: uppercase; color: #35404c;
+  }
+  table.grid tbody td { padding: 5px 8px; border-bottom: 1px solid var(--grid-line); border-right: 1px solid var(--grid-line); vertical-align: top; }
+  table.grid tbody tr.order-row { cursor: pointer; }
+  table.grid tbody tr.order-row:hover { background: #f2f6fa; }
+  table.grid tbody tr.order-row.open { background: var(--sel); }
+  table.grid tbody tr.order-row.open:hover { background: var(--sel); }
+  table.grid tbody td.empty { text-align: center; color: var(--muted); padding: 16px; }
+
+  .tlight { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 1px solid #0003; vertical-align: -1px; }
+  .tlight.CRTD { background: var(--red); }
+  .tlight.REL { background: var(--yellow); }
+  .tlight.TECO { background: var(--green); }
+  .order-link { color: var(--link); font: 700 12px var(--mono); }
+  .brk-tag { display: inline-block; margin-left: 5px; font: 700 9px var(--sans); color: #fff; background: var(--red); padding: 1px 5px; border-radius: 3px; letter-spacing: .03em; vertical-align: 1px; }
+  .prio-1, .prio-2 { color: var(--red); font-weight: 700; }
+  .prio-3 { color: var(--yellow); font-weight: 700; }
+  .prio-4 { color: var(--muted); }
+  .status-text { font: 700 10px var(--sans); letter-spacing: .02em; }
+  .status-text.CRTD { color: var(--red); }
+  .status-text.REL { color: var(--yellow); }
+  .status-text.TECO { color: var(--green); }
+
+  tr.detail-row td { background: #f7f9fb; border-bottom: 2px solid var(--border); padding: 0; }
+  .detail { padding: 12px 16px; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 20px; margin-bottom: 10px; font-size: 12px; }
+  .detail-grid div span { display: block; font: 700 10px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  .detail-note { margin: 8px 0; padding: 8px 10px; background: #fff; border: 1px solid var(--grid-line); border-radius: 3px; white-space: pre-wrap; }
+  .detail-actions { display: flex; gap: 8px; margin-top: 6px; }
+
+  form.wo-form { display: grid; gap: 8px; max-width: 640px; }
+  form.wo-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  form.wo-form .field { display: grid; gap: 3px; }
+  form.wo-form label { font: 700 10px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+  form.wo-form input, form.wo-form select, form.wo-form textarea {
+    font: 12px var(--sans); padding: 5px 7px; border: 1px solid var(--border); border-radius: 2px; background: #fff;
+  }
+  form.wo-form textarea { resize: vertical; min-height: 50px; }
+  .checkline { display: flex; align-items: center; gap: 6px; font: 12px var(--sans); }
+  .form-actions { display: flex; gap: 8px; margin-top: 2px; }
+  .hint { font-size: 11px; color: var(--red); min-height: 14px; }
+
+  #create-panel { margin: 0 12px 10px; }
+  #create-panel[hidden] { display: none; }
+
+  body.stale .grid-wrap { opacity: .6; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="sysinfo">SHT-TRN · Client 100</span>
+  <div class="spacer"></div>
+  <span>Technician <input id="technician" placeholder="your name" autocomplete="off" style="font:11px Arial; padding:2px 5px; border:1px solid var(--border); border-radius:2px; width:120px;"></span>
+  <div class="nav"><a href="/">&#8962; All systems</a></div>
+</div>
+
+<div class="titlebar">
+  <span class="tcode">IW38</span>
+  <div>
+    <h1>Plant Maintenance — Order List</h1>
+    <div class="sub">Waffle Line 01 · Work Order Overview</div>
+  </div>
+</div>
+
+<div class="selection">
+  <h2>Selection Criteria</h2>
+  <div class="sel-body">
+    <div class="sel-field">
+      <label>Status</label>
+      <select id="f-status">
+        <option value="">All</option>
+        <option value="CRTD">CRTD — Created</option>
+        <option value="REL">REL — Released</option>
+        <option value="TECO">TECO — Completed</option>
+      </select>
+    </div>
+    <div class="sel-field">
+      <label>Functional Location</label>
+      <select id="f-floc"><option value="">All</option></select>
+    </div>
+    <div class="sel-field">
+      <label>Work Center</label>
+      <select id="f-wc"><option value="">All</option></select>
+    </div>
+    <div class="sel-field">
+      <label>Priority</label>
+      <select id="f-prio"><option value="">All</option></select>
+    </div>
+    <div class="sel-field">
+      <label>Short text contains</label>
+      <input id="f-text" placeholder="search…">
+    </div>
+    <button class="btn accent" id="execute">&#9658; Execute</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button class="btn primary" id="new-order">+ Create Order</button>
+  <span class="count" id="count"></span>
+  <div class="spacer"></div>
+  <a class="btn" href="/exports" target="_blank" rel="noopener">View Data Exports &#8599;</a>
+</div>
+
+<div id="create-panel" class="selection" hidden>
+  <h2>Create Order</h2>
+  <div class="sel-body" style="display:block;">
+    <form class="wo-form" id="create-form">
+      <div class="row2">
+        <div class="field"><label>Order Type</label><select data-f="order_type" id="c-type"></select></div>
+        <div class="field"><label>Priority</label><select data-f="priority" id="c-prio"></select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Functional Location</label><select data-f="functional_location" id="c-floc"></select></div>
+        <div class="field"><label>Work Center</label><select data-f="work_center" id="c-wc"></select></div>
+      </div>
+      <div class="field"><label>Short Text (problem description)</label><input data-f="short_text" required placeholder="e.g. Exhaust fan bearing noise"></div>
+      <div class="checkline"><input type="checkbox" id="c-breakdown"><label for="c-breakdown" style="text-transform:none;font-weight:400;">Breakdown — equipment is down</label></div>
+      <div class="field"><label>Reported By</label><input data-f="reported_by" id="c-reported"></div>
+      <div class="hint" id="create-hint"></div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Save</button>
+        <button type="button" class="btn" id="create-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="grid-wrap">
+  <table class="grid">
+    <thead>
+      <tr>
+        <th style="width:24px"></th>
+        <th>Order</th>
+        <th>Type</th>
+        <th>Prio</th>
+        <th>Functional Location</th>
+        <th>Work Ctr</th>
+        <th>Short Text</th>
+        <th>Created</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="grid-body"></tbody>
+  </table>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let META = null;
+let ORDERS = [];
+const rowEls = {}; // order id -> { row, detailRow, detailEl }
+let openId = null; // currently expanded order id
+
+function label(list, code) {
+  const hit = (list || []).find((p) => p[0] === code);
+  return hit ? hit[1] : code;
+}
+function fmtDate(t) {
+  return t == null ? "—" : new Date(t * 1000).toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+function fmtHours(h) {
+  return h == null ? "—" : `${h.toFixed(2)} h`;
+}
+function technicianName() { return $("technician").value.trim(); }
+
+function fillSelect(sel, list, withAll) {
+  sel.innerHTML = (withAll ? [["", "All"]] : []).concat(list).map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+}
+
+function populateMeta() {
+  fillSelect($("f-floc"), META.functional_locations, true);
+  fillSelect($("f-wc"), META.work_centers, true);
+  fillSelect($("f-prio"), META.priorities, true);
+  fillSelect($("c-type"), META.order_types, false);
+  fillSelect($("c-prio"), META.priorities, false);
+  fillSelect($("c-floc"), META.functional_locations, false);
+  fillSelect($("c-wc"), META.work_centers, false);
+}
+
+function passesFilter(o) {
+  if ($("f-status").value && o.status !== $("f-status").value) return false;
+  if ($("f-floc").value && o.functional_location !== $("f-floc").value) return false;
+  if ($("f-wc").value && o.work_center !== $("f-wc").value) return false;
+  if ($("f-prio").value && o.priority !== $("f-prio").value) return false;
+  const q = $("f-text").value.trim().toLowerCase();
+  if (q && !o.short_text.toLowerCase().includes(q)) return false;
+  return true;
+}
+
+function buildDetail(order) {
+  const wrap = document.createElement("div");
+  wrap.className = "detail";
+  wrap.dataset.body = "1";
+  render_detail(wrap, order);
+  return wrap;
+}
+
+function render_detail(wrap, order) {
+  const meta = `
+    <div class="detail-grid">
+      <div><span>Reported By</span>${order.reported_by || "—"}</div>
+      <div><span>Breakdown</span>${order.breakdown ? "Yes" : "No"}</div>
+      <div><span>Created</span>${fmtDate(order.created_at)}</div>
+      <div><span>Released</span>${fmtDate(order.started_at)}</div>
+      <div><span>Completed</span>${fmtDate(order.completed_at)}</div>
+    </div>`;
+
+  if (order.status === "CRTD") {
+    wrap.innerHTML = meta + `
+      <div class="detail-actions">
+        <button class="btn accent" data-start>Release &amp; Start Work</button>
+      </div>`;
+    wrap.querySelector("[data-start]").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`api/workorders/${order.id}/start`, { method: "POST" });
+        if (res.ok) Object.assign(order, (await res.json()).order);
+        renderRow(order);
+      } finally { btn.disabled = false; }
+    });
+    return;
+  }
+
+  if (order.status === "REL") {
+    wrap.innerHTML = meta + `
+      <form class="wo-form" data-complete>
+        <div class="field"><label>Work Performed</label><textarea data-f="work_performed" placeholder="What was done to resolve it" required></textarea></div>
+        <div class="row2">
+          <div class="field"><label>Work Duration (hours)</label><input type="number" step="any" min="0" data-f="work_duration_h" placeholder="labour hours"></div>
+          <div class="field"><label>Downtime Duration (hours)</label><input type="number" step="any" min="0" data-f="downtime_duration_h" placeholder="equipment downtime"></div>
+        </div>
+        <div class="field"><label>Downtime Reason</label><select data-f="downtime_reason">${[["", "— none —"]].concat(META.downtime_reasons).map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></div>
+        <div class="hint" data-hint></div>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Technically Complete (TECO)</button>
+        </div>
+      </form>`;
+    const form = wrap.querySelector("[data-complete]");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {};
+      form.querySelectorAll("[data-f]").forEach((el) => { body[el.dataset.f] = el.value; });
+      if (!body.work_performed.trim()) { form.querySelector("[data-hint]").textContent = "Describe the work performed before completing."; return; }
+      const btn = form.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`api/workorders/${order.id}/complete`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        if (res.ok) { Object.assign(order, (await res.json()).order); renderRow(order); }
+        else { form.querySelector("[data-hint]").textContent = "Could not complete the order — try again."; btn.disabled = false; }
+      } catch { form.querySelector("[data-hint]").textContent = "Could not reach the server."; btn.disabled = false; }
+    });
+    return;
+  }
+
+  // TECO — read only
+  wrap.innerHTML = meta + `
+    <div class="detail-grid">
+      <div><span>Work Duration</span>${fmtHours(order.work_duration_h)}</div>
+      <div><span>Downtime Duration</span>${fmtHours(order.downtime_duration_h)}</div>
+      <div><span>Downtime Reason</span>${order.downtime_reason ? label(META.downtime_reasons, order.downtime_reason) : "—"}</div>
+    </div>
+    <div class="detail-note"><strong>Work performed:</strong><br>${(order.work_performed || "—").replace(/</g, "&lt;")}</div>`;
+}
+
+function buildRow(order) {
+  const row = document.createElement("tr");
+  row.className = "order-row";
+  row.dataset.id = order.id;
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  detailRow.hidden = true;
+  const td = document.createElement("td");
+  td.colSpan = 9;
+  detailRow.appendChild(td);
+
+  row.addEventListener("click", () => toggleRow(order.id));
+
+  const entry = { row, detailRow, detailTd: td, detailBuilt: false, detailStatus: null };
+  rowEls[order.id] = entry;
+  renderRow(order);
+  return entry;
+}
+
+function toggleRow(id) {
+  if (openId && openId !== id && rowEls[openId]) {
+    rowEls[openId].row.classList.remove("open");
+    rowEls[openId].detailRow.hidden = true;
+  }
+  const entry = rowEls[id];
+  const opening = openId !== id;
+  openId = opening ? id : null;
+  entry.row.classList.toggle("open", opening);
+  entry.detailRow.hidden = !opening;
+  if (opening && !entry.detailBuilt) {
+    const order = ORDERS.find((o) => o.id === id);
+    entry.detailTd.appendChild(buildDetail(order));
+    entry.detailBuilt = true;
+    entry.detailStatus = order.status;
+  }
+}
+
+function renderRow(order) {
+  const entry = rowEls[order.id];
+  if (!entry) return;
+  entry.row.innerHTML = `
+    <td><span class="tlight ${order.status}" title="${order.status}"></span></td>
+    <td><span class="order-link">${order.id}</span></td>
+    <td>${order.order_type}</td>
+    <td class="prio-${order.priority}">${order.priority}</td>
+    <td>${label(META.functional_locations, order.functional_location)}</td>
+    <td>${order.work_center}</td>
+    <td>${order.short_text}${order.breakdown ? '<span class="brk-tag">BREAKDOWN</span>' : ""}</td>
+    <td>${fmtDate(order.created_at)}</td>
+    <td class="status-text ${order.status}">${order.status}</td>`;
+  // Only rebuild the (possibly mid-edit) detail panel when the order's status actually changed —
+  // e.g. right after Start/Complete — never on a routine poll, or unsaved input would be wiped.
+  if (entry.detailBuilt && entry.detailTd.firstChild && entry.detailStatus !== order.status) {
+    render_detail(entry.detailTd.firstChild, order);
+    entry.detailStatus = order.status;
+  }
+}
+
+function renderGrid() {
+  const tbody = $("grid-body");
+  const visible = ORDERS.filter(passesFilter);
+  $("count").textContent = `${visible.length} order${visible.length === 1 ? "" : "s"}`;
+  const keep = new Set(visible.map((o) => o.id));
+  for (const id of Object.keys(rowEls)) {
+    if (!keep.has(id)) {
+      rowEls[id].row.remove();
+      rowEls[id].detailRow.remove();
+      delete rowEls[id];
+      if (openId === id) openId = null;
+    }
+  }
+  if (visible.length === 0) {
+    tbody.innerHTML = `<tr><td class="empty" colspan="9">No orders match the selection criteria</td></tr>`;
+    return;
+  }
+  tbody.querySelector(".empty")?.closest("tr")?.remove();
+  for (const order of visible) {
+    let entry = rowEls[order.id];
+    if (!entry) entry = buildRow(order);
+    else renderRow(order);
+    tbody.appendChild(entry.row);
+    tbody.appendChild(entry.detailRow);
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch("api/workorders", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const body = await res.json();
+    const firstLoad = META === null;
+    META = body.meta;
+    ORDERS = body.orders;
+    if (firstLoad) populateMeta();
+    renderGrid();
+    document.body.classList.remove("stale");
+  } catch {
+    document.body.classList.add("stale");
+  } finally {
+    setTimeout(poll, 4000);
+  }
+}
+
+["f-status", "f-floc", "f-wc", "f-prio"].forEach((id) => $(id).addEventListener("change", renderGrid));
+$("f-text").addEventListener("input", renderGrid);
+$("execute").addEventListener("click", renderGrid);
+
+$("new-order").addEventListener("click", () => {
+  $("create-panel").hidden = false;
+  $("c-reported").value = technicianName();
+});
+$("create-cancel").addEventListener("click", () => { $("create-panel").hidden = true; $("create-form").reset(); $("create-hint").textContent = ""; });
+$("create-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const body = { breakdown: $("c-breakdown").checked };
+  form.querySelectorAll("[data-f]").forEach((el) => { body[el.dataset.f] = el.value; });
+  if (!body.short_text.trim()) { $("create-hint").textContent = "Enter a short description of the problem."; return; }
+  const btn = form.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/workorders", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) { $("create-hint").textContent = "Could not create the order — try again."; btn.disabled = false; return; }
+    try { localStorage.setItem("maintTechnician", body.reported_by); } catch {}
+    const order = (await res.json()).order;
+    ORDERS.unshift(order);
+    $("create-panel").hidden = true;
+    form.reset();
+    renderGrid();
+  } catch {
+    $("create-hint").textContent = "Could not reach the server.";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+try { $("technician").value = localStorage.getItem("maintTechnician") || ""; } catch {}
+$("technician").addEventListener("change", () => { try { localStorage.setItem("maintTechnician", technicianName()); } catch {} });
+
+poll();
+</script>
+</body>
+</html>
