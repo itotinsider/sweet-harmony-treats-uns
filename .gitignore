@@ -9,9 +9,10 @@ __pycache__/
 /nodered_data/*
 !/nodered_data/flows.json
 
-# MQTT Explorer's saved connections/settings — personal/runtime, not source
+# MQTT Explorer's runtime state — only the seeded settings.json (Waffle Line 01 connection) is tracked
 /mqtt_explorer_data/*
 !/mqtt_explorer_data/.gitkeep
+!/mqtt_explorer_data/settings.json
 
 # Mosquitto's persistence file (retained messages) — runtime state, not source
 /mosquitto/data/*

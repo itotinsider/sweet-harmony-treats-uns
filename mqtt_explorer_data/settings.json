@@ -1,0 +1,22 @@
+{
+  "ConnectionManager_connections": {
+    "Waffle Line 01": {
+      "configVersion": 1,
+      "certValidation": true,
+      "clientId": "mqtt-explorer-waffle-line-01",
+      "id": "Waffle Line 01",
+      "name": "Waffle Line 01",
+      "encryption": false,
+      "subscriptions": [
+        {
+          "topic": "v1.0/SHT/#",
+          "qos": 0
+        }
+      ],
+      "type": "mqtt",
+      "host": "mosquitto",
+      "port": 1883,
+      "protocol": "mqtt"
+    }
+  }
+}
