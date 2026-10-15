@@ -1,5 +1,15 @@
 # Waffle Line 01 — MQTT Simulator & HMI
 
+> **Disclaimer.** This code is part of the [IT/OT Academy](https://itot.academy), offered by
+> [The IT/OT Insider](https://itotinsider.com). It is a generated, vibe-coded system made **only for
+> demo purposes**. It may not be used for anything other than demonstration or training: not in
+> production, not connected to real equipment, and not as the basis for any real control, quality
+> or maintenance decision.
+>
+> Its main purpose is to explain the **Unified Namespace (UNS)**, so it includes one: process data,
+> maintenance orders and quality results from separate systems, published into a single
+> ISA-95-structured MQTT topic tree (see [The ISA-95 structure](#the-isa-95-structure) below).
+
 Simulates a waffle production line (Sweet Harmony Treats, Munich) and publishes ~46 process values
 every 5 seconds to an MQTT broker. Includes a SCADA-style web HMI with a button that injects a
 reproducible energy anomaly, for testing anomaly-detection agents.
@@ -8,6 +18,12 @@ reproducible energy anomaly, for testing anomaly-detection agents.
 
 - Docker Desktop (or Docker Engine + Compose v2)
 - Ports free on the host: **1883** (MQTT), **8090** (HMI), **1880** (Node-RED), **4000** (MQTT Explorer)
+
+## Easiest way to start
+Open Claude Code in this directory and run the following prompt:
+```
+read the CLAUDE.md file and README.md file and set up the environment 
+```
 
 ## 1. Start everything
 
@@ -23,8 +39,6 @@ Node-RED and MQTT Explorer. The broker listens on **localhost:1883** with no use
 so external clients (e.g. an AI agent) on the host connect there; containers in the stack reach it
 by its service name, `mosquitto:1883`. Retained messages are persisted in `mosquitto/data/`.
 
-If you previously ran a standalone broker on port 1883 (e.g. the old `hivemq` container), stop it
-first: `docker rm -f hivemq`.
 
 ## 2. Open the hub
 
@@ -44,6 +58,91 @@ docker logs waffle-line-simulator          # expect "Connected to mosquitto:1883
 Or subscribe with any MQTT client to `v1.0/SHT/#` (covers the structured tree, the raw feed, and
 everything Node-RED publishes) — or just open **MQTT Explorer** at http://localhost:4000, where a
 "Waffle Line 01" connection is already saved and pointed at the broker; click Connect.
+
+## How the bakery works
+
+**Sweet Harmony Treats** is a fictional bakery in Munich. Its one modelled production line,
+**Waffle Line 01**, makes yeasted waffles continuously, in six process areas from raw material to
+packed carton:
+
+1. **Ingredient Handling** — flour, sugar and yeast are held in silos and dosed into the line
+   together with process water (silo levels, dosing flow, water flow).
+2. **Batter Mixing** — a mixer combines them into ~250 kg batches of batter (mixer speed and motor
+   current, batter temperature and viscosity, batch weight).
+3. **Proofing** — the yeasted dough rests ~45 minutes in a warm (35 °C), humid (80 %) chamber so it
+   rises (chamber temperature, humidity and pressure, proofing time, dough height).
+4. **Oven** — the heart of the line, and the most detailed part of the model. A belt carries the
+   waffles through two gas-fired **heating zones** (~210 °C and ~225 °C, top and bottom), each with
+   its own burner valve, gas flow and circulation fan. An **air circulation** system (exhaust fan,
+   airflow, and the pressure drop across the air filter) and **humidity control** (steam valve)
+   condition the oven atmosphere, and **utility metering** measures its electricity (~85 kW) and
+   gas use.
+5. **Cooling** — a cooling conveyor brings the product down to ~28 °C (conveyor and fan speed,
+   product temperature and moisture).
+6. **Packaging** — waffles are sealed into packs at ~60 packs/minute and packed 12 to a carton
+   (pack rate, reject rate, seal temperature, film tension, carton count).
+
+The headline KPI is **specific energy consumption**: oven electricity per pack produced (kWh/pack).
+It is the number the energy anomaly below disturbs.
+
+Around the line run the plant systems people use day to day, each with its own screen in the hub:
+
+- **SCADA** (`/modern`, `/classic`): operators watch the live process and start or stop each area.
+- **Quality Lab** (`/lab`): a technician takes scheduled dough samples at Proofing and baked samples
+  at the Oven, and registers results against spec limits.
+- **Production (MES)** (`/mes`): production orders for three recipes (Classic Belgian, Chocolate
+  Chip, Wholegrain Honey). Each has a bill of materials and a six-step checklist, one step per
+  process area.
+- **Maintenance** (`/maint`): SAP-PM-style work orders against functional locations such as
+  `WL01-OVN-AIR`.
+
+These systems are deliberately *not* integrated with each other. Each keeps its own data, the way
+it often is in a real plant, and the Unified Namespace is what brings them together.
+
+## The ISA-95 structure
+
+ISA-95 (IEC 62264) describes a plant as a hierarchy of equipment levels. The structured topic tree
+follows that hierarchy. For example, the top temperature of the oven's first heating zone:
+
+```
+v1.0/SHT/Munich/Production/WaffleLine01/Oven/HeatingZone01/TemperatureTop
+```
+
+| Topic segment | ISA-95 level | In this plant |
+|---|---|---|
+| `v1.0` | — | Namespace version, so the tree can change later without breaking consumers |
+| `SHT` | Enterprise | Sweet Harmony Treats |
+| `Munich` | Site | The Munich bakery |
+| `Production` | Area | The production area of the site |
+| `WaffleLine01` | Work center (production line) | Waffle Line 01 |
+| `Oven` | Work unit | One of the six process areas |
+| `HeatingZone01` | Equipment module | A part of the unit (ISA-88 terminology) |
+| `TemperatureTop` | Data point (tag) | The measured value, with unit and timestamp |
+
+The same tree carries more than process data. Node-RED publishes the maintenance and quality
+systems' records into it, under the same enterprise and site but a different domain:
+
+```
+v1.0/SHT/Munich/Production/WaffleLine01/Oven/AirCirculation/DifferentialPressure     ← SCADA
+v1.0/SHT/Munich/Maintenance/WaffleLine01/Oven/AirCirculation/LatestWorkOrder         ← Maintenance
+v1.0/SHT/Munich/Quality/WaffleLine01/Proofing/DoughPh                                ← Quality lab
+```
+
+That is the point of a UNS. A consumer, such as the diagnosing AI agent, can find the oven filter's
+pressure, the latest work order on that filter and the latest dough quality result by navigating
+one structure, without integrating with the SCADA, the maintenance system and the LIMS one by one.
+Compare it with the flat `Munich_RAW` feed described under [Topic structure](#topic-structure):
+same values, no structure.
+
+The systems themselves also map onto the ISA-95 *functional* levels, which is how the hub at
+http://localhost:8090 groups them:
+
+| Level | Role | Here |
+|---|---|---|
+| Level 0–1 | Physical process, sensors and actuators | Simulated by `simulator.py` |
+| Level 2 | Monitoring and control | Modern and Classic SCADA HMIs |
+| Level 3 | Manufacturing operations (MOM) | MES, Quality Lab (LIMS), Maintenance |
+| IT/OT integration | Unified Namespace | Mosquitto broker, Node-RED, MQTT Explorer |
 
 ## Injecting an energy anomaly
 
