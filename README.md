@@ -59,7 +59,61 @@ Or subscribe with any MQTT client to `v1.0/SHT/#` (covers the structured tree, t
 everything Node-RED publishes) — or just open **MQTT Explorer** at http://localhost:4000, where a
 "Waffle Line 01" connection is already saved and pointed at the broker; click Connect.
 
+## Screenshots
+
+**Hub**: one page linking every system, grouped by ISA-95 level.
+
+![Hub](docs/screenshots/hub.png)
+
+**Modern HMI, during an energy anomaly.** ISA-101 style: grey by default, colour only for
+alarms. A clogged oven air filter raises filter ΔP and fan speeds, lowers airflow and pushes oven
+power above 100 kW, so specific energy consumption climbs past its +15 % line (right). The
+training pane on the left walks through the ISA-95 equipment hierarchy.
+
+![Modern HMI during an energy anomaly](docs/screenshots/modern-anomaly.png)
+
+**1990s Classic HMI**: the same line and the same anomaly, styled like a Windows-95-era SCADA
+package, with a fault-simulation button and an alarm/event log.
+
+![Classic HMI](docs/screenshots/classic.png)
+
+**Quality Lab (LIMS)**: scheduled and ad hoc samples at Proofing and Oven, results checked
+against spec limits, with a trend per parameter. One Proofing sample failed on dough temperature.
+
+![Quality Lab](docs/screenshots/lab.png)
+
+**Production (MES)**: a shop-floor board of production orders. Each order has a six-step
+checklist, one step per process area, and reports yield and material usage when it completes.
+
+![Production MES](docs/screenshots/mes.png)
+
+**Maintenance**: an SAP-PM-style order list (IW38) with status traffic lights. Orders are raised
+against functional locations such as `WL01-OVN-AIR`, the oven's air circulation.
+
+![Maintenance order list](docs/screenshots/maint.png)
+
+**Data exports**: the flat CSV extracts that the maintenance and lab systems write, which
+Node-RED reads.
+
+![Data exports](docs/screenshots/exports.png)
+
+**Node-RED**: the `Maintenance → Unified Namespace` flow. It polls the CSV, keeps the latest order
+per functional location and publishes it into the topic tree.
+
+![Node-RED flow](docs/screenshots/nodered.png)
+
+**MQTT Explorer**: the Unified Namespace. `Production`, `Quality` and `Maintenance` sit side by
+side under `v1.0/SHT/Munich`, with the flat `Munich_RAW` feed next to it for contrast.
+
+![MQTT Explorer](docs/screenshots/mqtt-explorer.png)
+
+Screenshots are taken with headless Chrome (see `CLAUDE.md`). The pages have no deep links, so
+the anomaly shots are taken about 30 s after `POST /api/anomaly`, and the MQTT Explorer shot is
+scripted over the Chrome DevTools protocol to click Connect and expand the tree.
+
 ## How the bakery works
+
+![Waffle Line 01 process flow and plant systems](docs/bakery-process.svg)
 
 **Sweet Harmony Treats** is a fictional bakery in Munich. Its one modelled production line,
 **Waffle Line 01**, makes yeasted waffles continuously, in six process areas from raw material to

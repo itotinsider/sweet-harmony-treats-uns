@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 600" width="1240" height="600" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b93a7"/>
+    </marker>
+    <marker id="arrow-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e6a55a"/>
+    </marker>
+    <style>
+      .bg { fill: #14171c; }
+      .box { fill: #1c2028; stroke: #3a4046; stroke-width: 1.5; }
+      .oven { fill: #1f1c19; stroke: #e6a55a; stroke-width: 2; }
+      .chip { fill: #262a33; stroke: #3a4046; }
+      .num { fill: #8b93a7; font-size: 12px; font-weight: 600; letter-spacing: 1px; }
+      .name { fill: #e7eaf0; font-size: 16px; font-weight: 600; }
+      .val { fill: #cfd4d9; font-size: 12.5px; }
+      .muted { fill: #8b93a7; font-size: 12px; }
+      .out { fill: #8b93a7; font-size: 12px; font-style: italic; }
+      .chiptxt { fill: #cfd4d9; font-size: 12px; }
+      .chipval { fill: #8b93a7; font-size: 12px; }
+      .flow { stroke: #8b93a7; stroke-width: 2; fill: none; }
+      .kpi { fill: #2a2117; stroke: #e6a55a; stroke-width: 1.5; }
+      .kpitxt { fill: #e6a55a; font-size: 14px; font-weight: 600; }
+      .dash { stroke: #e6a55a; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+      .tag { fill: #23272b; stroke: #2dd4bf; }
+      .tagtxt { fill: #2dd4bf; font-size: 11px; font-weight: 600; }
+      .sys { fill: #1c2028; stroke: #3a4046; }
+      .systitle { fill: #e7eaf0; font-size: 14px; font-weight: 600; }
+      .uns { fill: #181d26; stroke: #3b82f6; stroke-width: 1.5; }
+      .unstxt { fill: #93b8f5; font-size: 14px; font-weight: 600; }
+      .link { stroke: #3b82f6; stroke-width: 1.5; fill: none; }
+      .title { fill: #e7eaf0; font-size: 20px; font-weight: 700; }
+      .subtitle { fill: #8b93a7; font-size: 13px; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1240" height="600" rx="12"/>
+
+  <text class="title" x="20" y="38">Waffle Line 01</text>
+  <text class="subtitle" x="166" y="38">Sweet Harmony Treats · Munich · yeasted waffles, raw material to packed carton</text>
+
+  <!-- Process flow arrows -->
+  <line class="flow" x1="180" y1="150" x2="208" y2="150" marker-end="url(#arrow)"/>
+  <line class="flow" x1="370" y1="150" x2="398" y2="150" marker-end="url(#arrow)"/>
+  <line class="flow" x1="560" y1="150" x2="588" y2="150" marker-end="url(#arrow)"/>
+  <line class="flow" x1="840" y1="150" x2="868" y2="150" marker-end="url(#arrow)"/>
+  <line class="flow" x1="1030" y1="150" x2="1058" y2="150" marker-end="url(#arrow)"/>
+
+  <!-- 1 Ingredient Handling -->
+  <rect class="box" x="20" y="64" width="160" height="236" rx="8"/>
+  <text class="num" x="34" y="88">01</text>
+  <text class="name" x="34" y="110">Ingredient</text>
+  <text class="name" x="34" y="130">Handling</text>
+  <text class="val" x="34" y="160">Flour, sugar, yeast</text>
+  <text class="val" x="34" y="178">silos</text>
+  <text class="val" x="34" y="200">Dosing flow</text>
+  <text class="val" x="34" y="218">Process water</text>
+  <text class="out" x="34" y="284">→ dosed ingredients</text>
+
+  <!-- 2 Batter Mixing -->
+  <rect class="box" x="210" y="64" width="160" height="236" rx="8"/>
+  <text class="num" x="224" y="88">02</text>
+  <text class="name" x="224" y="110">Batter</text>
+  <text class="name" x="224" y="130">Mixing</text>
+  <text class="val" x="224" y="160">Mixer speed, current</text>
+  <text class="val" x="224" y="178">Batter temperature</text>
+  <text class="val" x="224" y="196">and viscosity</text>
+  <text class="val" x="224" y="218">~250 kg batches</text>
+  <text class="out" x="224" y="284">→ batter</text>
+
+  <!-- 3 Proofing -->
+  <rect class="box" x="400" y="64" width="160" height="236" rx="8"/>
+  <text class="num" x="414" y="88">03</text>
+  <text class="name" x="414" y="110">Proofing</text>
+  <text class="val" x="414" y="160">~45 min rest</text>
+  <text class="val" x="414" y="178">35 °C, 80 % humidity</text>
+  <text class="val" x="414" y="200">Dough rises</text>
+  <text class="val" x="414" y="218">(dough height)</text>
+  <rect class="tag" x="414" y="236" width="84" height="20" rx="10"/>
+  <text class="tagtxt" x="456" y="250" text-anchor="middle">Lab sample</text>
+  <text class="out" x="414" y="284">→ proofed dough</text>
+
+  <!-- 4 Oven -->
+  <rect class="oven" x="590" y="56" width="250" height="252" rx="8"/>
+  <text class="num" x="604" y="80" fill="#e6a55a" style="fill:#e6a55a">04 · HEART OF THE LINE</text>
+  <text class="name" x="604" y="102">Oven</text>
+  <rect class="chip" x="604" y="114" width="222" height="26" rx="5"/>
+  <text class="chiptxt" x="614" y="131">Heating Zone 01</text>
+  <text class="chipval" x="816" y="131" text-anchor="end">gas · ~210 °C</text>
+  <rect class="chip" x="604" y="144" width="222" height="26" rx="5"/>
+  <text class="chiptxt" x="614" y="161">Heating Zone 02</text>
+  <text class="chipval" x="816" y="161" text-anchor="end">gas · ~225 °C</text>
+  <rect class="chip" x="604" y="174" width="222" height="26" rx="5"/>
+  <text class="chiptxt" x="614" y="191">Air circulation</text>
+  <text class="chipval" x="816" y="191" text-anchor="end">fan · filter ΔP</text>
+  <rect class="chip" x="604" y="204" width="222" height="26" rx="5"/>
+  <text class="chiptxt" x="614" y="221">Humidity control</text>
+  <text class="chipval" x="816" y="221" text-anchor="end">steam valve</text>
+  <rect class="chip" x="604" y="234" width="222" height="26" rx="5" style="stroke:#e6a55a"/>
+  <text class="chiptxt" x="614" y="251">Utility metering</text>
+  <text class="chipval" x="816" y="251" text-anchor="end">~85 kW · gas</text>
+  <rect class="tag" x="604" y="270" width="84" height="20" rx="10"/>
+  <text class="tagtxt" x="646" y="284" text-anchor="middle">Lab sample</text>
+  <text class="out" x="826" y="284" text-anchor="end">→ baked waffles</text>
+
+  <!-- 5 Cooling -->
+  <rect class="box" x="870" y="64" width="160" height="236" rx="8"/>
+  <text class="num" x="884" y="88">05</text>
+  <text class="name" x="884" y="110">Cooling</text>
+  <text class="val" x="884" y="160">Cooling conveyor</text>
+  <text class="val" x="884" y="178">and fan</text>
+  <text class="val" x="884" y="200">Down to ~28 °C</text>
+  <text class="val" x="884" y="218">Product moisture</text>
+  <text class="out" x="884" y="284">→ cooled waffles</text>
+
+  <!-- 6 Packaging -->
+  <rect class="box" x="1060" y="64" width="160" height="236" rx="8"/>
+  <text class="num" x="1074" y="88">06</text>
+  <text class="name" x="1074" y="110">Packaging</text>
+  <text class="val" x="1074" y="160">~60 packs/min</text>
+  <text class="val" x="1074" y="178">Seal temperature,</text>
+  <text class="val" x="1074" y="196">film tension</text>
+  <text class="val" x="1074" y="218">12 packs / carton</text>
+  <text class="out" x="1074" y="284">→ cartons</text>
+
+  <!-- KPI -->
+  <path class="dash" d="M715,308 L715,350 L770,350"/>
+  <path class="dash" d="M1140,300 L1140,350 L1090,350"/>
+  <rect class="kpi" x="772" y="332" width="316" height="38" rx="19"/>
+  <text class="kpitxt" x="930" y="356" text-anchor="middle">KPI  ·  oven kWh ÷ packs = kWh/pack</text>
+
+  <!-- Plant systems -->
+  <text class="num" x="20" y="410">PLANT SYSTEMS (NOT INTEGRATED WITH EACH OTHER)</text>
+
+  <rect class="sys" x="20" y="422" width="287" height="70" rx="8"/>
+  <text class="systitle" x="36" y="446">SCADA</text>
+  <text class="muted" x="36" y="466">Live process values, start/stop</text>
+  <text class="muted" x="36" y="482">for all six areas · /modern, /classic</text>
+
+  <rect class="sys" x="327" y="422" width="287" height="70" rx="8"/>
+  <text class="systitle" x="343" y="446">Quality Lab (LIMS)</text>
+  <text class="muted" x="343" y="466">Scheduled samples at Proofing</text>
+  <text class="muted" x="343" y="482">and Oven, against spec · /lab</text>
+
+  <rect class="sys" x="634" y="422" width="287" height="70" rx="8"/>
+  <text class="systitle" x="650" y="446">Production (MES)</text>
+  <text class="muted" x="650" y="466">Orders for 3 recipes, BOM and a</text>
+  <text class="muted" x="650" y="482">6-step checklist, one per area · /mes</text>
+
+  <rect class="sys" x="941" y="422" width="279" height="70" rx="8"/>
+  <text class="systitle" x="957" y="446">Maintenance (SAP PM style)</text>
+  <text class="muted" x="957" y="466">Work orders on functional locations</text>
+  <text class="muted" x="957" y="482">e.g. WL01-OVN-AIR · /maint</text>
+
+  <!-- Unified Namespace -->
+  <line class="link" x1="163" y1="492" x2="163" y2="530"/>
+  <line class="link" x1="470" y1="492" x2="470" y2="530"/>
+  <line class="link" x1="1080" y1="492" x2="1080" y2="530"/>
+  <rect class="uns" x="20" y="530" width="1200" height="50" rx="8"/>
+  <text class="unstxt" x="620" y="551" text-anchor="middle">Unified Namespace · MQTT</text>
+  <text class="muted" x="620" y="569" text-anchor="middle" style="font-family: ui-monospace, Menlo, Consolas, monospace">v1.0/SHT/Munich/{Production | Quality | Maintenance}/WaffleLine01/…</text>
+</svg>

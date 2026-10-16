@@ -56,6 +56,8 @@ c.loop_start(); time.sleep(3); c.loop_stop()'
 
 Chrome will not lay out narrower than ~500px, so a 400px capture is a cropped 500px layout, not a real phone viewport.
 
+README screenshots live in `docs/screenshots/` (1600 px wide; window height trimmed to each page's content), and the "How the bakery works" diagram is a hand-written SVG, `docs/bakery-process.svg`; keep it in step with the README if the process areas or plant systems change. No page has deep links, so: register a few lab results and create a work order through the API first, so Lab/Maintenance/exports aren't empty; trigger the anomaly and capture `/modern` and `/classic` ~30 s later, at full severity; capture Node-RED at 2200×560 so the whole flow fits next to the sidebars. MQTT Explorer needs a click on Connect, which headless `--screenshot` can't do, so drive a `--remote-debugging-port` Chrome over CDP (Node's built-in `WebSocket`; `Runtime.evaluate` to click Connect and the tree nodes, then `Page.captureScreenshot`).
+
 ## Environment assumptions
 
 - The broker is **Eclipse Mosquitto, a service in this compose file** (`waffle-line-mosquitto`), port 1883, no auth (`allow_anonymous true`). It replaced a standalone HiveMQ container on the host; there is no control-center UI any more — use MQTT Explorer. Port 1883 is still published to the host so the external agent can connect to `localhost:1883`.
